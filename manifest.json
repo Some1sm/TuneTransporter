@@ -1,0 +1,33 @@
+// manifest.json
+
+{
+  "manifest_version": 3,
+  "name": "TuneTransporter",
+  "version": "1.1", // Good practice to increment the version
+  "description": "Automatically redirects music links between Spotify and YouTube Music.",
+  "icons": {
+    "16": "icon16.jpeg",
+    "32": "icon32.jpeg",
+    "48": "icon48.jpeg",
+    "128": "icon128.jpeg"
+  },
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html" // Keep this for the popup
+  },
+  "content_scripts": [
+    {
+      "matches": [ "https://open.spotify.com/track/*" ],
+      "js": [ "spotify2ytm-content.js" ], // Separate file for Spotify
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [ "https://music.youtube.com/watch*" ],
+      "js": [ "ytm2spotify-content.js" ], // Separate file for YouTube Music
+      "run_at": "document_idle"
+    }
+  ]
+}
