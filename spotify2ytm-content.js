@@ -44,11 +44,11 @@ function spotifyToYTM() {
 // Check spotifyEnabled setting before running
 chrome.storage.local.get(['spotifyEnabled'], function (result) {
     // Check explicitly for true, handles undefined or false cases
-    if (result.spotifyEnabled === true) {
-        // Using 'document_idle' should be sufficient here, but a small timeout can ensure
-        // any client-side title updates have likely finished. Adjust or remove if not needed.
-
-        setTimeout(spotifyToYTM, 0);
+    if (result.spotifyEnabled !== false) {
+        // Run directly. `document_idle` should be sufficient for the title to be available.
+        // If issues arise with dynamically updated titles, a small delay might be reintroduced,
+        // but start without it.
+        spotifyToYTM();
     } else {
         console.log("TuneTransporter: Spotify -> YTM redirection is disabled in settings.");
     }
