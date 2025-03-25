@@ -1,128 +1,82 @@
-﻿// spotify2ytm-content.js
-console.log("TuneTransporter: Spotify to YTM script loaded.");
-
-// --- Feedback Function ---
+﻿// --- (Feedback Function goes here) ---
 let feedbackTimeoutId = null; // Keep track of the timeout for the feedback message
+// ... (showFeedback function code) ...
 
-function showFeedback(message, duration = 5000) {
-    // Remove any existing feedback message instantly
-    const existingFeedback = document.getElementById('tunetransporter-feedback');
-    if (existingFeedback) {
-        existingFeedback.remove();
-        if (feedbackTimeoutId) {
-            clearTimeout(feedbackTimeoutId);
-            feedbackTimeoutId = null;
-        }
-    }
-
-    // Create the feedback element
-    const feedbackDiv = document.createElement('div');
-    feedbackDiv.id = 'tunetransporter-feedback';
-    feedbackDiv.textContent = message;
-
-    // Basic styling - feel free to customize
-    Object.assign(feedbackDiv.style, {
-        position: 'fixed',
-        top: '15px',
-        right: '15px',
-        backgroundColor: 'rgba(255, 221, 221, 0.95)', // Light red background
-        color: '#8B0000', // Dark red text
-        padding: '10px 15px',
-        borderRadius: '5px',
-        zIndex: '99999', // Ensure it's on top
-        fontSize: '14px',
-        fontFamily: 'sans-serif',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-        opacity: '0', // Start hidden for fade-in
-        transition: 'opacity 0.3s ease-in-out'
-    });
-
-    // Add to page
-    document.body.appendChild(feedbackDiv);
-
-    // Trigger fade-in after append (allows transition to work)
-    setTimeout(() => {
-        feedbackDiv.style.opacity = '1';
-    }, 10);
-
-
-    // Set timeout to fade out and remove
-    feedbackTimeoutId = setTimeout(() => {
-        feedbackDiv.style.opacity = '0';
-        // Remove from DOM after fade-out completes
-        setTimeout(() => {
-            if (document.body.contains(feedbackDiv)) {
-                document.body.removeChild(feedbackDiv);
-            }
-            feedbackTimeoutId = null;
-        }, 300); // Matches the transition duration
-    }, duration);
-
-    // Optional: Allow clicking the message to dismiss it early
-    feedbackDiv.addEventListener('click', () => {
-        if (feedbackTimeoutId) {
-            clearTimeout(feedbackTimeoutId);
-            feedbackTimeoutId = null;
-        }
-        feedbackDiv.style.opacity = '0';
-        setTimeout(() => {
-            if (document.body.contains(feedbackDiv)) {
-                document.body.removeChild(feedbackDiv);
-            }
-        }, 300);
-    }, { once: true }); // Remove listener after first click
-}
-
-// --- Core Logic ---
+// --- Spotify Extraction Logic ---
 function spotifyToYTM() {
+    let trackName = null;
+    let artistName = null;
+
     try {
-        // Attempt to extract info from title tag (can be fragile)
-        // Consider alternative methods like checking meta tags (og:title, etc.) or embedded JSON data.
+        // --- Plan A: Try extracting from the page title ---
+        console.log("TuneTransporter: Attempting title extraction (Plan A)...");
         const titleTagText = document.title;
-        // Updated regex to be slightly more flexible with separators and "song by" variations
-        const match = titleTagText.match(/^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i);
+        const titleMatch = titleTagText.match(/^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i);
 
-        if (match && match[1] && match[2]) {
-            const trackName = match[1].trim();
-            // Split artists, handling "feat." and "&" variations slightly better
-            const primaryArtists = match[2].split(/,\s*|\s*&\s*|\s+feat\.\s+/i);
-            const artistName = primaryArtists.map(artist => artist.trim()).join(" "); // Join with spaces for search
+        if (titleMatch && titleMatch[1] && titleMatch[2]) {
+            const potentialTrack = titleMatch[1].trim();
+            const potentialArtistString = titleMatch[2];
 
-            if (trackName && artistName) {
-                console.log(`TuneTransporter: Extracted - Track: "${trackName}", Artist: "${artistName}"`);
-
-                // Construct the YouTube Music *website* search URL
-                const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(trackName + " " + artistName)}`;
-                console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
-
-                // Redirect
-                window.location.href = youtubeMusicSearchUrl;
-
+            // Basic validation that regex captured something
+            if (potentialTrack && potentialArtistString) {
+                trackName = potentialTrack;
+                // Process artists like before
+                const primaryArtists = potentialArtistString.split(/,\s*|\s*&\s*|\s+feat\.\s+/i);
+                artistName = primaryArtists.map(artist => artist.trim()).join(" ");
+                console.log(`TuneTransporter: Extracted via Title (Plan A) - Track: "${trackName}", Artist: "${artistName}"`);
             } else {
-                console.warn("TuneTransporter: Could not extract valid track or artist name from title match.");
-                // Call feedback function here
-                showFeedback("TuneTransporter: Could not extract song info.");
+                console.log("TuneTransporter: Title regex matched but captured empty groups.");
             }
-
         } else {
-            console.warn("TuneTransporter: Could not parse song information from page title:", titleTagText);
-            // Call feedback function here as well
+            console.log("TuneTransporter: Title regex did not match.");
+        }
+
+        // --- Plan B: If Plan A failed, try extracting from DOM elements ---
+        if (!trackName || !artistName) {
+            console.log("TuneTransporter: Plan A failed or incomplete, trying DOM extraction (Plan B)...");
+            // Selector for the H1 containing the track title, within the span with data-testid="entityTitle"
+            const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
+            // Selector for the anchor tag containing the artist name, with data-testid="creator-link"
+            const artistElement = document.querySelector('a[data-testid="creator-link"]');
+
+            if (titleElement && artistElement) {
+                const potentialTrack = titleElement.textContent?.trim();
+                const potentialArtist = artistElement.textContent?.trim();
+
+                if (potentialTrack && potentialArtist) {
+                    trackName = potentialTrack;
+                    artistName = potentialArtist; // Assuming single primary artist link is sufficient here
+                    console.log(`TuneTransporter: Extracted via DOM (Plan B) - Track: "${trackName}", Artist: "${artistName}"`);
+                } else {
+                    console.log("TuneTransporter: Found DOM elements but text content was empty.");
+                }
+            } else {
+                console.log("TuneTransporter: Could not find title/artist elements using DOM selectors.");
+            }
+        }
+
+        // --- Final Check and Redirect ---
+        if (trackName && artistName) {
+            // Construct the YouTube Music *website* search URL
+            const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(trackName + " " + artistName)}`;
+            console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
+            window.location.href = youtubeMusicSearchUrl;
+        } else {
+            // If *both* methods failed
+            console.warn("TuneTransporter: Failed to extract song info using title or DOM methods.");
             showFeedback("TuneTransporter: Could not find song info on this page.");
         }
 
     } catch (error) {
         console.error("TuneTransporter: Error during Spotify to YTM redirection:", error);
-        // Optionally show feedback for unexpected errors too
-        // showFeedback("TuneTransporter: An unexpected error occurred.");
+        showFeedback("TuneTransporter: An unexpected error occurred.");
     }
 }
 
 // --- Main execution ---
-// Check spotifyEnabled setting before running
 chrome.storage.local.get(['spotifyEnabled'], function (result) {
-    // Check explicitly for !== false to handle true or undefined as enabled
     if (result.spotifyEnabled !== false) {
-        // Run directly. `document_idle` should be sufficient for the title to be available.
+        // Run directly, document_idle should be enough for both title and main DOM elements
         spotifyToYTM();
     } else {
         console.log("TuneTransporter: Spotify -> YTM redirection is disabled in settings.");
