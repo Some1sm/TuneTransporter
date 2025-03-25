@@ -13,7 +13,81 @@ const YTM_WATCH_QUEUE_ITEM_SELECTOR = 'ytmusic-player-queue-item[selected]';
 const YTM_WATCH_TITLE_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .song-title`;
 const YTM_WATCH_ARTIST_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .byline`;
 
-// --- Functions ---
+
+// --- Feedback Function ---
+let feedbackTimeoutId = null; // Keep track of the timeout for the feedback message
+
+function showFeedback(message, duration = 5000) {
+    // Remove any existing feedback message instantly
+    const existingFeedback = document.getElementById('tunetransporter-feedback');
+    if (existingFeedback) {
+        existingFeedback.remove();
+        if (feedbackTimeoutId) {
+            clearTimeout(feedbackTimeoutId);
+            feedbackTimeoutId = null;
+        }
+    }
+
+    // Create the feedback element
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.id = 'tunetransporter-feedback';
+    feedbackDiv.textContent = message;
+
+    // Basic styling - feel free to customize
+    Object.assign(feedbackDiv.style, {
+        position: 'fixed',
+        top: '15px',
+        right: '15px',
+        backgroundColor: 'rgba(255, 221, 221, 0.95)', // Light red background
+        color: '#8B0000', // Dark red text
+        padding: '10px 15px',
+        borderRadius: '5px',
+        zIndex: '99999', // Ensure it's on top
+        fontSize: '14px',
+        fontFamily: 'sans-serif',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        opacity: '0', // Start hidden for fade-in
+        transition: 'opacity 0.3s ease-in-out'
+    });
+
+    // Add to page
+    document.body.appendChild(feedbackDiv);
+
+    // Trigger fade-in after append (allows transition to work)
+    setTimeout(() => {
+        feedbackDiv.style.opacity = '1';
+    }, 10);
+
+
+    // Set timeout to fade out and remove
+    feedbackTimeoutId = setTimeout(() => {
+        feedbackDiv.style.opacity = '0';
+        // Remove from DOM after fade-out completes
+        setTimeout(() => {
+            if (document.body.contains(feedbackDiv)) {
+                document.body.removeChild(feedbackDiv);
+            }
+            feedbackTimeoutId = null;
+        }, 300); // Matches the transition duration
+    }, duration);
+
+    // Optional: Allow clicking the message to dismiss it early
+    feedbackDiv.addEventListener('click', () => {
+        if (feedbackTimeoutId) {
+            clearTimeout(feedbackTimeoutId);
+            feedbackTimeoutId = null;
+        }
+        feedbackDiv.style.opacity = '0';
+        setTimeout(() => {
+            if (document.body.contains(feedbackDiv)) {
+                document.body.removeChild(feedbackDiv);
+            }
+        }, 300);
+    }, { once: true }); // Remove listener after first click
+}
+
+
+// --- Core Logic Functions ---
 
 function tryExtractAndRedirect() {
     const currentUrl = window.location.href;
@@ -39,6 +113,8 @@ function tryExtractAndRedirect() {
                 extracted = true;
             } else {
                 console.warn("TuneTransporter: Could not find title/artist header elements on playlist page using selectors:", YTM_PLAYLIST_TITLE_SELECTOR, YTM_PLAYLIST_ARTIST_SELECTOR);
+                // Call feedback function here
+                showFeedback("TuneTransporter: Could not find song info on this page header.");
             }
         }
         // --- Logic for Watch pages (watch?v=...) ---
@@ -50,6 +126,8 @@ function tryExtractAndRedirect() {
         } else {
             // Should not happen based on manifest matches, but good for safety
             console.log("TuneTransporter: URL doesn't match known YTM patterns for redirection:", currentUrl);
+            // Optionally show feedback if this unexpected case occurs
+            // showFeedback("TuneTransporter: Unsupported YTM page type.");
             return;
         }
 
@@ -61,13 +139,14 @@ function tryExtractAndRedirect() {
             window.location.href = spotifySearchUrl;
         } else if (extracted) { // Extracted flag is true, but track/artist name is missing
             console.warn("TuneTransporter: Found elements but extracted names were empty.");
-        } else {
-            // If not extracted (e.g., elements not found on playlist page), log it
-            console.warn("TuneTransporter: Could not extract track/artist info directly from page elements.");
+            // Call feedback function here
+            showFeedback("TuneTransporter: Could not extract song info (empty fields).");
         }
+        // No feedback needed if !extracted, as the warning/feedback was shown inside the 'if' block
 
     } catch (error) {
         console.error("TuneTransporter: Error during YTM to Spotify extraction/redirection:", error);
+        // showFeedback("TuneTransporter: An unexpected error occurred.");
     }
 }
 
@@ -90,6 +169,8 @@ function initializeWatchPageObserver() {
 
     timeoutId = setTimeout(() => {
         console.warn(`TuneTransporter: Watch page observer timeout. Could not find elements using selectors (${YTM_WATCH_TITLE_SELECTOR}, ${YTM_WATCH_ARTIST_SELECTOR}) within ${YTM_OBSERVER_TIMEOUT_MS / 1000} seconds.`);
+        // Call feedback function on timeout
+        showFeedback(`TuneTransporter: Timed out finding song info (${YTM_OBSERVER_TIMEOUT_MS / 1000}s).`);
         cleanup();
     }, YTM_OBSERVER_TIMEOUT_MS);
 
@@ -115,8 +196,12 @@ function initializeWatchPageObserver() {
                 cleanup(); // Stop observing *before* redirecting
                 window.location.href = spotifySearchUrl;
 
-            } else if (!timeoutId) { // Only log warning if timeout hasn't already occurred
+            } else if (!timeoutId) { // Only log/show feedback if timeout hasn't already fired
                 console.warn("TuneTransporter: Watch observer found elements but title/artist text was empty or processing failed.");
+                // Call feedback function here
+                showFeedback("TuneTransporter: Could not extract song info (empty fields).");
+                // Decide if you want to cleanup() here too, or let it keep trying/timeout
+                // cleanup(); // Optional: Stop trying if fields are empty once found
             }
         }
         // Else: Elements not found yet, observer continues...
@@ -134,6 +219,7 @@ function initializeWatchPageObserver() {
 
 // --- Main execution ---
 chrome.storage.local.get(['ytmEnabled'], function (result) {
+    // Check explicitly for !== false to handle true or undefined as enabled
     if (result.ytmEnabled !== false) {
         // Use a small timeout. `document_idle` might not guarantee that
         // dynamically loaded header elements (like on playlist/album pages)

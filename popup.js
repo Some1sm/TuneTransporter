@@ -7,19 +7,20 @@ document.addEventListener('DOMContentLoaded', function () {
     // Load saved settings
     chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
         // Spotify Toggle
+        // Default to true if undefined
+        spotifyToggle.checked = data.spotifyEnabled !== false;
+        // Ensure storage reflects the default if it was undefined
         if (data.spotifyEnabled === undefined) {
             chrome.storage.local.set({ spotifyEnabled: true });
-            spotifyToggle.checked = true;
-        } else {
-            spotifyToggle.checked = data.spotifyEnabled;
         }
 
+
         // YTM Toggle
+        // Default to true if undefined
+        ytmToggle.checked = data.ytmEnabled !== false;
+        // Ensure storage reflects the default if it was undefined
         if (data.ytmEnabled === undefined) {
             chrome.storage.local.set({ ytmEnabled: true });
-            ytmToggle.checked = true;
-        } else {
-            ytmToggle.checked = data.ytmEnabled;
         }
     });
 
