@@ -28,7 +28,8 @@
     {
       "matches": [
         "https://music.youtube.com/watch*",
-        "https://music.youtube.com/playlist*"
+        "https://music.youtube.com/playlist?list=*",
+        "https://music.youtube.com/channel/*"
       ],
       "js": [ "ytm2spotify-content.js" ],
       "run_at": "document_idle"
