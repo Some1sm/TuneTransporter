@@ -20,7 +20,8 @@
     {
       "matches": [
         "https://open.spotify.com/track/*",
-        "https://open.spotify.com/album/*"
+        "https://open.spotify.com/album/*",
+        "https://open.spotify.com/artist/*"
       ],
       "js": [ "spotify2ytm-content.js" ],
       "run_at": "document_idle"
