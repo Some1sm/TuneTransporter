@@ -1,65 +1,55 @@
-// content.js
-console.log("Content script loaded on Spotify track page!");
+﻿// spotify2ytm-content.js
+console.log("TuneTransporter: Spotify to YTM script loaded.");
 
 function spotifyToYTM() {
     try {
+        // Attempt to extract info from title tag (can be fragile)
+        // Consider alternative methods like checking meta tags (og:title, etc.) or embedded JSON data.
         const titleTagText = document.title;
-        const match = titleTagText.match(/(.*) - song and lyrics by (.*) \| Spotify/);
+        // Updated regex to be slightly more flexible with separators and "song by" variations
+        const match = titleTagText.match(/^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i);
 
-        if (match) {
+        if (match && match[1] && match[2]) {
             const trackName = match[1].trim();
-            const artists = match[2].trim().split(", ");
-            let artistName = "";
-            for (let i = 0; i < artists.length; i++) {
-                artistName += artists[i];
-                if (i + 1 < artists.length)
-                    artistName += " ";
+            // Split artists, handling "feat." and "&" variations slightly better
+            const primaryArtists = match[2].split(/,\s*|\s*&\s*|\s+feat\.\s+/i);
+            const artistName = primaryArtists.map(artist => artist.trim()).join(" "); // Join with spaces for search
+
+            if (trackName && artistName) {
+                console.log(`TuneTransporter: Extracted - Track: "${trackName}", Artist: "${artistName}"`);
+
+                // Construct the YouTube Music *website* search URL
+                const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(trackName + " " + artistName)}`;
+                console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
+
+                // Redirect
+                window.location.href = youtubeMusicSearchUrl;
+
+            } else {
+                console.warn("TuneTransporter: Could not extract valid track or artist name from title match.");
             }
-
-            // Construct the YouTube Music *website* search URL 
-            const youtubeMusicUrl = `https://music.youtube.com/search?q=${encodeURIComponent(trackName + " " + artistName)}`;
-
-            // --- PWA URL Construction (Sadly seems like PWA doesn't accept custom URLs :( ) ---
-            // const pwaUrl = `youtubemusic://search?q=${encodeURIComponent(trackName + " " + artistName)}`;
-            
-
-            // --- Fallback URL (NOT USED, since I always use the website URL now) ---
-            // const fallbackUrl = `https://music.youtube.com/search?q=${encodeURIComponent(trackName + " " + artistName)}`;
-
-            // --- PWA Launch Attempt (COMMENTED OUT) ---
-            /*
-            try {
-                // Try launching the PWA using the protocol handler
-                window.location.href = pwaUrl;
-            } catch (error) {
-                // If launching the PWA fails (e.g., it's not installed), use the fallback
-                console.error("PWA launch failed, falling back to website:", error);
-                window.location.href = fallbackUrl; // Use fallback in case of error.
-            }
-            */
-
-            // --- Website Redirection ---
-            window.location.href = youtubeMusicUrl;
-
 
         } else {
-            alert("TuneTransporter:\n\nCould not find song information.  Please make sure you are on a Spotify track page.");
+            console.warn("TuneTransporter: Could not parse song information from page title:", titleTagText);
+            // Avoid alert() - Consider injecting a subtle message onto the page if feedback is essential
+            // E.g., injectBanner("TuneTransporter: Could not find song info on this Spotify page.");
         }
 
     } catch (error) {
-        console.error("Error extracting song info or redirecting:", error);
-        if (error && error.message) {
-            alert("TuneTransporter:\n\nAn unexpected error occurred: " + error.message);
-        } else {
-            alert("TuneTransporter:\n\nAn unexpected error occurred.");
-        }
+        console.error("TuneTransporter: Error during Spotify to YTM redirection:", error);
+        // Avoid alert() for internal errors
     }
 }
 
 // Check spotifyEnabled setting before running
-chrome.storage.local.get('spotifyEnabled', function (data) {
-    if (data.spotifyEnabled) {
-        spotifyToYTM();
+chrome.storage.local.get(['spotifyEnabled'], function (result) {
+    // Check explicitly for true, handles undefined or false cases
+    if (result.spotifyEnabled === true) {
+        // Using 'document_idle' should be sufficient here, but a small timeout can ensure
+        // any client-side title updates have likely finished. Adjust or remove if not needed.
+
+        setTimeout(spotifyToYTM, 0);
+    } else {
+        console.log("TuneTransporter: Spotify -> YTM redirection is disabled in settings.");
     }
 });
-
