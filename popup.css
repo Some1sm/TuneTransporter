@@ -1,0 +1,25 @@
+/* TuneTransporter/popup.css */
+body {
+    width: 250px;
+    font-family: sans-serif; /* Add a default font */
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+h1 {
+    font-size: 1.2em;
+    margin-top: 0;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+label {
+    display: flex; /* Use flexbox for alignment */
+    align-items: center;
+    margin-bottom: 10px; /* More space */
+    cursor: pointer; /* Indicate it's clickable */
+}
+
+input[type="checkbox"] {
+    margin-right: 8px; /* Space between checkbox and text */
+}
