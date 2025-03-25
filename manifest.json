@@ -18,7 +18,10 @@
   },
   "content_scripts": [
     {
-      "matches": [ "https://open.spotify.com/track/*" ],
+      "matches": [
+        "https://open.spotify.com/track/*",
+        "https://open.spotify.com/album/*"
+      ],
       "js": [ "spotify2ytm-content.js" ],
       "run_at": "document_idle"
     },
