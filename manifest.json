@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TuneTransporter",
-  "version": "1.2.1",
+  "version": "1.0",
   "description": "Automatically redirects music links between Spotify and YouTube Music.",
   "icons": {
     "16": "icons/icon16.jpeg",
@@ -10,11 +10,17 @@
     "128": "icons/icon128.jpeg"
   },
   "permissions": [
-    "activeTab",
     "storage"
+    // No activeTab needed
+  ],
+  "host_permissions": [
+    "*://www.youtube.com/*" // <-- Needed for fallback script
   ],
   "action": {
     "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
   },
   "content_scripts": [
     {
@@ -22,7 +28,7 @@
         "https://open.spotify.com/track/*",
         "https://open.spotify.com/album/*",
         "https://open.spotify.com/artist/*"
-      ],
+       ],
       "js": [ "spotify2ytm-content.js" ],
       "run_at": "document_idle"
     },
@@ -34,8 +40,8 @@
       ],
       "js": [ "ytm2spotify-content.js" ],
       "run_at": "document_idle"
-    }
-    { 
+    },
+    { // <-- New script for fallback
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [ "yt-fallback-content.js" ],
       "run_at": "document_idle"
