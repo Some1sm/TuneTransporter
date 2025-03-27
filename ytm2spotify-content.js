@@ -92,82 +92,83 @@ function showFeedback(message, duration = 5000) {
 
 // --- Core Logic Functions ---
 
-function tryExtractAndRedirect() {
+function tryExtractAndRedirect(isPrimaryEnabled, isFallbackEnabled) {
     const currentUrl = window.location.href;
-    let itemName = null; // Track/Album/Playlist name
+    let itemName = null;
     let artistName = null;
     let extracted = false;
-    let isArtistSearch = false; // Flag for artist-only searches
+    let isArtistSearch = false;
+
+    // --- This function no longer handles watch pages directly ---
+    // --- They are handled by the observer initialized in the main execution block ---
 
     try {
         // --- Logic for Playlist/Album/Single pages (playlist?list=...) ---
         if (currentUrl.startsWith("https://music.youtube.com/playlist?list=")) {
+            // This logic only runs if isPrimaryEnabled is true
+            if (!isPrimaryEnabled) {
+                console.log("TuneTransporter: Primary YTM->Spotify disabled for Playlist/Album page.");
+                return;
+            }
             console.log("TuneTransporter: Detected YTM Playlist/Album page.");
+            // ... (rest of Playlist/Album extraction remains the same) ...
             const titleElement = document.querySelector(YTM_PLAYLIST_TITLE_SELECTOR);
             const artistElement = document.querySelector(YTM_PLAYLIST_ARTIST_SELECTOR);
-
             if (titleElement && titleElement.title && artistElement && artistElement.title) {
-                itemName = titleElement.title.trim(); // Album/Playlist title
-                artistName = artistElement.title.trim(); // Associated artist(s)
+                itemName = titleElement.title.trim();
+                artistName = artistElement.title.trim();
                 console.log(`TuneTransporter: Extracted from Header - Item: "${itemName}", Artist: "${artistName}"`);
                 extracted = true;
             } else {
-                console.warn("TuneTransporter: Could not find title/artist header elements on playlist page using selectors:", YTM_PLAYLIST_TITLE_SELECTOR, YTM_PLAYLIST_ARTIST_SELECTOR);
+                console.warn("TuneTransporter: Could not find title/artist header elements on playlist page...");
                 showFeedback("TuneTransporter: Could not find playlist/album info on this page header.");
             }
+
         }
         // --- Logic for Artist pages (channel/...) ---
-        else if (currentUrl.includes("/channel/")) { // Use includes() as base URL might vary slightly
+        else if (currentUrl.includes("/channel/")) {
+            // This logic only runs if isPrimaryEnabled is true
+            if (!isPrimaryEnabled) {
+                console.log("TuneTransporter: Primary YTM->Spotify disabled for Artist page.");
+                return;
+            }
             console.log("TuneTransporter: Detected YTM Artist page.");
+            // ... (rest of Artist extraction remains the same) ...
             const artistElement = document.querySelector(YTM_ARTIST_NAME_SELECTOR);
-
             if (artistElement && artistElement.title) {
-                artistName = artistElement.title.trim(); // The main H1 title is the artist name
-                itemName = null; // No specific item name needed for artist search
+                artistName = artistElement.title.trim();
+                itemName = null;
                 console.log(`TuneTransporter: Extracted Artist Name: "${artistName}"`);
                 extracted = true;
-                isArtistSearch = true; // Set flag
+                isArtistSearch = true;
             } else {
-                console.warn("TuneTransporter: Could not find artist name element on channel page using selector:", YTM_ARTIST_NAME_SELECTOR);
+                console.warn("TuneTransporter: Could not find artist name element on channel page...");
                 showFeedback("TuneTransporter: Could not find artist info on this page header.");
             }
         }
-        // --- Logic for Watch pages (watch?v=...) ---
-        else if (currentUrl.startsWith("https://music.youtube.com/watch")) {
-            console.log("TuneTransporter: Detected YTM watch page. Initializing observer.");
-            initializeWatchPageObserver();
-            return; // Observer handles redirection asynchronously
-        }
-        // --- Unknown Page Type ---
-        else {
-            console.log("TuneTransporter: URL doesn't match known YTM patterns for redirection:", currentUrl);
+        // --- Watch pages are handled by observer, non-matching URLs ignored ---
+        else if (!currentUrl.startsWith("https://music.youtube.com/watch")) {
+            console.log("TuneTransporter: URL doesn't match known YTM patterns for redirection (excluding watch):", currentUrl);
             return;
         }
 
-        // --- Common Redirection Logic ---
-        if (extracted && artistName) { // Artist name is the minimum requirement
+
+        // --- Common Redirection Logic (only runs if extracted and primary enabled) ---
+        if (extracted && artistName) {
             let searchQuery;
-            if (isArtistSearch) {
-                searchQuery = artistName; // Just search for the artist name
-                console.log(`TuneTransporter: Preparing Spotify search for artist: "${searchQuery}"`);
-            } else if (itemName) {
-                searchQuery = itemName + " " + artistName; // Combine item and artist
-                console.log(`TuneTransporter: Preparing Spotify search for item: "${itemName}", artist: "${artistName}"`);
-            } else {
-                console.warn("TuneTransporter: Extracted artist but item name is missing for non-artist search.");
-                showFeedback("TuneTransporter: Error preparing search query.");
-                return; // Don't proceed if item name is expected but missing
-            }
+            // ... (searchQuery logic remains the same) ...
+            if (isArtistSearch) { searchQuery = artistName; }
+            else if (itemName) { searchQuery = itemName + " " + artistName; }
+            else { /* handle error */ showFeedback("TuneTransporter: Error preparing search query."); return; }
 
             const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
             console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
             window.location.href = spotifySearchUrl;
 
-        } else if (extracted) { // Extracted but missing required info (e.g., artist name)
+        } else if (extracted) {
             console.warn("TuneTransporter: Extraction flag set but missing artist name.");
             showFeedback("TuneTransporter: Could not extract required info (artist missing).");
         }
-        // If !extracted, feedback was already shown inside the specific 'if' block
 
     } catch (error) {
         console.error("TuneTransporter: Error during YTM to Spotify extraction/redirection:", error);
@@ -175,14 +176,22 @@ function tryExtractAndRedirect() {
     }
 }
 
+// Observer now accepts enabled states as parameters
+function initializeWatchPageObserver(isPrimaryEnabled, isFallbackEnabled) {
+    // Only proceed if either primary or fallback is enabled
+    if (!isPrimaryEnabled && !isFallbackEnabled) {
+        console.log("TuneTransporter: Both primary and fallback YTM->Spotify are disabled. Observer not starting.");
+        return;
+    }
 
-function initializeWatchPageObserver() {
+    console.log(`TuneTransporter: Initializing observer for watch page. Primary: ${isPrimaryEnabled}, Fallback: ${isFallbackEnabled}`);
+
     let observer = null;
     let timeoutId = null;
-    let redirectionAttempted = false; // Flag to prevent multiple redirects/timeouts
+    let redirectionAttempted = false;
 
     const cleanup = (reason = "Cleanup called") => {
-        if (redirectionAttempted) return; // Already handled
+        if (redirectionAttempted) return;
         console.log(`TuneTransporter: Observer cleanup triggered - Reason: ${reason}`);
         if (observer) {
             observer.disconnect();
@@ -193,87 +202,113 @@ function initializeWatchPageObserver() {
             clearTimeout(timeoutId);
             timeoutId = null;
         }
-        redirectionAttempted = true; // Mark as handled
+        redirectionAttempted = true;
     };
+
+    // --- Fallback Redirect Helper ---
+    // Now only needs to check isFallbackEnabled (passed to outer function)
+    const triggerFallbackRedirect = (reason) => {
+        if (redirectionAttempted) return;
+
+        // Check if the fallback setting passed to the observer is enabled
+        if (!isFallbackEnabled) {
+            console.log(`TuneTransporter: Primary watch extraction failed (${reason}), and fallback is disabled.`);
+            cleanup(`Fallback Disabled: ${reason}`);
+            // Show feedback only if primary also failed (or was disabled)
+            showFeedback("TuneTransporter: Could not extract song info.");
+            return;
+        }
+
+        // Fallback is enabled, proceed
+        console.warn(`TuneTransporter: Watch page action failed (${reason}). Triggering www.youtube.com fallback.`);
+        cleanup(`Fallback Triggered: ${reason}`);
+
+        const currentUrl = new URL(window.location.href);
+        currentUrl.hostname = 'www.youtube.com';
+        currentUrl.hash = '#tunetransporter-fallback';
+
+        console.log(`TuneTransporter: Redirecting to fallback URL: ${currentUrl.href}`);
+        window.location.href = currentUrl.href;
+        redirectionAttempted = true;
+    };
+    // ------------------------------------
 
     timeoutId = setTimeout(() => {
         if (redirectionAttempted) return;
-        const reason = `Timeout finding elements (${YTM_WATCH_TITLE_SELECTOR}, ${YTM_WATCH_ARTIST_SELECTOR}) within ${YTM_OBSERVER_TIMEOUT_MS / 1000}s.`;
-        console.warn(`TuneTransporter: ${reason}`);
-        showFeedback(`TuneTransporter: Timed out finding song info.`);
-        cleanup("Timeout");
+        triggerFallbackRedirect("Timeout");
     }, YTM_OBSERVER_TIMEOUT_MS);
 
     observer = new MutationObserver((mutations, obs) => {
-        if (redirectionAttempted) return; // Don't process if already handled
+        if (redirectionAttempted) return;
 
-        // Log when the observer callback fires to see if it's running
-        // console.log("TuneTransporter: Watch observer callback fired.");
-
-        // Try to find the elements *every time* the observer fires,
-        // as the 'selected' attribute might appear/disappear/reappear
         const songTitleElement = document.querySelector(YTM_WATCH_TITLE_SELECTOR);
         const artistElement = document.querySelector(YTM_WATCH_ARTIST_SELECTOR);
 
-        // Add detailed logging (Uncomment for debugging)
-        // console.log("TuneTransporter: Checking elements:", {
-        //     titleElementFound: !!songTitleElement,
-        //     artistElementFound: !!artistElement,
-        //     titleAttr: songTitleElement?.title, // Use optional chaining
-        //     artistAttr: artistElement?.title    // Use optional chaining
-        // });
+        if (songTitleElement && artistElement) {
+            if (songTitleElement.title && artistElement.title) {
+                const trackName = songTitleElement.title.trim();
+                let artistText = (artistElement.title || artistElement.textContent || "").trim();
+                if (artistText.includes('•') && artistText.split('•')[0].trim()) {
+                    artistText = artistText.split('•')[0].trim();
+                }
+                const artistName = artistText;
 
+                if (trackName && artistName) {
+                    // --- SUCCESSFUL PRIMARY EXTRACTION ---
+                    console.log(`TuneTransporter: Extracted from Watch Observer - Track: "${trackName}", Artist: "${artistName}"`);
 
-        if (songTitleElement && songTitleElement.title && artistElement && artistElement.title) {
-            // Both elements found AND they have non-empty title attributes
-
-            const trackName = songTitleElement.title.trim();
-            // Safer artist extraction: Use title attr first, fallback to text, then cleanup.
-            let artistText = (artistElement.title || artistElement.textContent || "").trim();
-
-            // Only split if '•' is present AND there's something before it.
-            if (artistText.includes('•') && artistText.split('•')[0].trim()) {
-                artistText = artistText.split('•')[0].trim();
+                    // **** Check if primary redirection is enabled ****
+                    if (isPrimaryEnabled) {
+                        const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(trackName + " " + artistName)}`;
+                        console.log(`TuneTransporter: Primary redirect enabled. Redirecting to Spotify search: ${spotifySearchUrl}`);
+                        cleanup("Primary redirection successful");
+                        window.location.href = spotifySearchUrl;
+                    } else {
+                        // Primary is disabled, but extraction succeeded. Trigger fallback *if enabled*.
+                        console.log("TuneTransporter: Primary redirect disabled, but extraction succeeded. Checking fallback.");
+                        triggerFallbackRedirect("Primary disabled");
+                    }
+                    // ---------------------------------------
+                } else { // Found elements but empty fields -> Trigger Fallback
+                    if (timeoutId) { // Check if timeout hasn't already handled it
+                        console.warn("TuneTransporter: Watch observer - Elements found, but processed names were empty.");
+                        triggerFallbackRedirect("Empty fields");
+                    }
+                }
             }
-            // Ensure we still have something after potential split/trim
-            const artistName = artistText;
-
-
-            if (trackName && artistName) {
-                console.log(`TuneTransporter: Extracted from Watch Observer - Track: "${trackName}", Artist: "${artistName}"`);
-                const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(trackName + " " + artistName)}`;
-                console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
-
-                cleanup("Redirection successful"); // Stop observing *before* redirecting
-                window.location.href = spotifySearchUrl;
-
-            } else if (!timeoutId) { // Should only happen if timeout occurred just before this check
-                console.warn("TuneTransporter: Watch observer - Elements found, but processed names were empty.");
-                // Don't show feedback here if timeout already did
-                // showFeedback("TuneTransporter: Could not extract song info (empty fields).");
-            }
+            // Else: Elements exist, but title attributes are not ready yet...
         }
-        // Else: Elements or their titles not found/ready yet, observer continues...
+        // Else: Elements not found yet...
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true,
-        // Observe attributes more broadly in case 'selected' or 'title' aren't the only relevant changes
         attributes: true,
-        // Optional: Remove attributeFilter if you suspect other attributes are changing relevantly
-        // attributeFilter: ['selected', 'title', 'class'] // Maybe add 'class'? Or remove filter entirely?
     });
     console.log("TuneTransporter: YTM Watch observer started.");
 }
 
 
 // --- Main execution ---
-chrome.storage.local.get(['ytmEnabled'], function (result) {
-    if (result.ytmEnabled !== false) {
-        // Use a small timeout to allow page elements to settle, especially headers
-        setTimeout(tryExtractAndRedirect, 200);
-    } else {
-        console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
+// Read BOTH settings initially
+chrome.storage.local.get(['ytmEnabled', 'ytmFallbackEnabled'], function (settings) {
+    const isPrimaryEnabled = settings.ytmEnabled !== false; // Default true
+    const isFallbackEnabled = settings.ytmFallbackEnabled === true; // Default false
+
+    // If it's a watch page, always call the observer initialization function,
+    // passing the settings. The observer function itself will decide if it needs to run.
+    if (window.location.href.startsWith("https://music.youtube.com/watch")) {
+        // Use a timeout to let page settle before starting observer
+        setTimeout(() => initializeWatchPageObserver(isPrimaryEnabled, isFallbackEnabled), 200);
+    }
+    // For other page types (Playlist/Artist), only run the direct extraction if primary is enabled
+    else if (isPrimaryEnabled) {
+        // Use a timeout to let page settle
+        setTimeout(() => tryExtractAndRedirect(isPrimaryEnabled, isFallbackEnabled), 200);
+    }
+    // If primary is disabled and it's not a watch page, do nothing.
+    else {
+        console.log("TuneTransporter: YTM -> Spotify primary redirection is disabled for this page type.");
     }
 });
