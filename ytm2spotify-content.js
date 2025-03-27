@@ -19,7 +19,75 @@ const YTM_WATCH_ARTIST_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .byline`;
 
 // --- Feedback Function ---
 let feedbackTimeoutId = null; // Keep track of the timeout for the feedback message
-// ... (showFeedback function code remains the same) ...
+
+function showFeedback(message, duration = 5000) {
+    // Remove any existing feedback message instantly
+    const existingFeedback = document.getElementById('tunetransporter-feedback');
+    if (existingFeedback) {
+        existingFeedback.remove();
+        if (feedbackTimeoutId) {
+            clearTimeout(feedbackTimeoutId);
+            feedbackTimeoutId = null;
+        }
+    }
+
+    // Create the feedback element
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.id = 'tunetransporter-feedback';
+    feedbackDiv.textContent = message;
+
+    // Basic styling - feel free to customize
+    Object.assign(feedbackDiv.style, {
+        position: 'fixed',
+        top: '15px',
+        right: '15px',
+        backgroundColor: 'rgba(255, 221, 221, 0.95)', // Light red background
+        color: '#8B0000', // Dark red text
+        padding: '10px 15px',
+        borderRadius: '5px',
+        zIndex: '99999', // Ensure it's on top
+        fontSize: '14px',
+        fontFamily: 'sans-serif',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        opacity: '0', // Start hidden for fade-in
+        transition: 'opacity 0.3s ease-in-out'
+    });
+
+    // Add to page
+    document.body.appendChild(feedbackDiv);
+
+    // Trigger fade-in after append (allows transition to work)
+    setTimeout(() => {
+        feedbackDiv.style.opacity = '1';
+    }, 10);
+
+
+    // Set timeout to fade out and remove
+    feedbackTimeoutId = setTimeout(() => {
+        feedbackDiv.style.opacity = '0';
+        // Remove from DOM after fade-out completes
+        setTimeout(() => {
+            if (document.body.contains(feedbackDiv)) {
+                document.body.removeChild(feedbackDiv);
+            }
+            feedbackTimeoutId = null;
+        }, 300); // Matches the transition duration
+    }, duration);
+
+    // Optional: Allow clicking the message to dismiss it early
+    feedbackDiv.addEventListener('click', () => {
+        if (feedbackTimeoutId) {
+            clearTimeout(feedbackTimeoutId);
+            feedbackTimeoutId = null;
+        }
+        feedbackDiv.style.opacity = '0';
+        setTimeout(() => {
+            if (document.body.contains(feedbackDiv)) {
+                document.body.removeChild(feedbackDiv);
+            }
+        }, 300);
+    }, { once: true }); // Remove listener after first click
+}
 
 
 // --- Core Logic Functions ---
@@ -107,18 +175,103 @@ function tryExtractAndRedirect() {
     }
 }
 
-// --- (initializeWatchPageObserver function remains the same) ---
+
 function initializeWatchPageObserver() {
-    // ... existing observer code ...
-    // Important: Observer logic remains specific to watch pages (track/artist extraction)
-    // It should NOT be modified to handle artist pages.
+    let observer = null;
+    let timeoutId = null;
+    let redirectionAttempted = false; // Flag to prevent multiple redirects/timeouts
+
+    const cleanup = (reason = "Cleanup called") => {
+        if (redirectionAttempted) return; // Already handled
+        console.log(`TuneTransporter: Observer cleanup triggered - Reason: ${reason}`);
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+            console.log("TuneTransporter: YTM Watch observer disconnected.");
+        }
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+        redirectionAttempted = true; // Mark as handled
+    };
+
+    timeoutId = setTimeout(() => {
+        if (redirectionAttempted) return;
+        const reason = `Timeout finding elements (${YTM_WATCH_TITLE_SELECTOR}, ${YTM_WATCH_ARTIST_SELECTOR}) within ${YTM_OBSERVER_TIMEOUT_MS / 1000}s.`;
+        console.warn(`TuneTransporter: ${reason}`);
+        showFeedback(`TuneTransporter: Timed out finding song info.`);
+        cleanup("Timeout");
+    }, YTM_OBSERVER_TIMEOUT_MS);
+
+    observer = new MutationObserver((mutations, obs) => {
+        if (redirectionAttempted) return; // Don't process if already handled
+
+        // Log when the observer callback fires to see if it's running
+        // console.log("TuneTransporter: Watch observer callback fired.");
+
+        // Try to find the elements *every time* the observer fires,
+        // as the 'selected' attribute might appear/disappear/reappear
+        const songTitleElement = document.querySelector(YTM_WATCH_TITLE_SELECTOR);
+        const artistElement = document.querySelector(YTM_WATCH_ARTIST_SELECTOR);
+
+        // Add detailed logging (Uncomment for debugging)
+        // console.log("TuneTransporter: Checking elements:", {
+        //     titleElementFound: !!songTitleElement,
+        //     artistElementFound: !!artistElement,
+        //     titleAttr: songTitleElement?.title, // Use optional chaining
+        //     artistAttr: artistElement?.title    // Use optional chaining
+        // });
+
+
+        if (songTitleElement && songTitleElement.title && artistElement && artistElement.title) {
+            // Both elements found AND they have non-empty title attributes
+
+            const trackName = songTitleElement.title.trim();
+            // Safer artist extraction: Use title attr first, fallback to text, then cleanup.
+            let artistText = (artistElement.title || artistElement.textContent || "").trim();
+
+            // Only split if '•' is present AND there's something before it.
+            if (artistText.includes('•') && artistText.split('•')[0].trim()) {
+                artistText = artistText.split('•')[0].trim();
+            }
+            // Ensure we still have something after potential split/trim
+            const artistName = artistText;
+
+
+            if (trackName && artistName) {
+                console.log(`TuneTransporter: Extracted from Watch Observer - Track: "${trackName}", Artist: "${artistName}"`);
+                const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(trackName + " " + artistName)}`;
+                console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
+
+                cleanup("Redirection successful"); // Stop observing *before* redirecting
+                window.location.href = spotifySearchUrl;
+
+            } else if (!timeoutId) { // Should only happen if timeout occurred just before this check
+                console.warn("TuneTransporter: Watch observer - Elements found, but processed names were empty.");
+                // Don't show feedback here if timeout already did
+                // showFeedback("TuneTransporter: Could not extract song info (empty fields).");
+            }
+        }
+        // Else: Elements or their titles not found/ready yet, observer continues...
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        // Observe attributes more broadly in case 'selected' or 'title' aren't the only relevant changes
+        attributes: true,
+        // Optional: Remove attributeFilter if you suspect other attributes are changing relevantly
+        // attributeFilter: ['selected', 'title', 'class'] // Maybe add 'class'? Or remove filter entirely?
+    });
+    console.log("TuneTransporter: YTM Watch observer started.");
 }
 
 
 // --- Main execution ---
 chrome.storage.local.get(['ytmEnabled'], function (result) {
     if (result.ytmEnabled !== false) {
-        // Use a small timeout to allow page elements to settle
+        // Use a small timeout to allow page elements to settle, especially headers
         setTimeout(tryExtractAndRedirect, 200);
     } else {
         console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
