@@ -3,11 +3,11 @@
 document.addEventListener('DOMContentLoaded', function () {
     const spotifyToggle = document.getElementById('spotifyToggle');
     const ytmToggle = document.getElementById('ytmToggle');
-    const ytmFallbackToggle = document.getElementById('ytmFallbackToggle'); // Get the new toggle
+    // const ytmFallbackToggle = document.getElementById('ytmFallbackToggle'); // REMOVE
 
     // Load saved settings
-    // Add 'ytmFallbackEnabled' to the keys we retrieve
-    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled', 'ytmFallbackEnabled'], function (data) {
+    // Remove 'ytmFallbackEnabled'
+    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
         // Spotify Toggle
         spotifyToggle.checked = data.spotifyEnabled !== false; // Default true
         if (data.spotifyEnabled === undefined) {
@@ -20,13 +20,12 @@ document.addEventListener('DOMContentLoaded', function () {
             chrome.storage.local.set({ ytmEnabled: true });
         }
 
-        // YTM Fallback Toggle
-        // Default to FALSE if undefined
-        ytmFallbackToggle.checked = data.ytmFallbackEnabled === true;
-        // Ensure storage reflects the default (false) if it was undefined
-        if (data.ytmFallbackEnabled === undefined) {
-            chrome.storage.local.set({ ytmFallbackEnabled: false });
-        }
+        // Remove Fallback Toggle logic
+        // // YTM Fallback Toggle
+        // ytmFallbackToggle.checked = data.ytmFallbackEnabled === true;
+        // if (data.ytmFallbackEnabled === undefined) {
+        //     chrome.storage.local.set({ ytmFallbackEnabled: false });
+        // }
     });
 
     // Save settings on change
@@ -38,8 +37,8 @@ document.addEventListener('DOMContentLoaded', function () {
         chrome.storage.local.set({ ytmEnabled: ytmToggle.checked });
     });
 
-    // Add listener for the new fallback toggle
-    ytmFallbackToggle.addEventListener('change', function () {
-        chrome.storage.local.set({ ytmFallbackEnabled: ytmFallbackToggle.checked });
-    });
+    // Remove Fallback Toggle listener
+    // ytmFallbackToggle.addEventListener('change', function () {
+    //     chrome.storage.local.set({ ytmFallbackEnabled: ytmFallbackToggle.checked });
+    // });
 });

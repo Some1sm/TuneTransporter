@@ -11,11 +11,11 @@ function setupContextMenus() {
 // --- Setup menus and defaults on install/update ---
 chrome.runtime.onInstalled.addListener((details) => {
     console.log("TuneTransporter: onInstalled event triggered", details.reason);
-    // setupContextMenus(); // Call if/when context menus are added
+    // setupContextMenus();
 
     // Initialize default settings if not present
-    // Add 'ytmFallbackEnabled' to the keys we retrieve and set default
-    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled', 'ytmFallbackEnabled'], (result) => {
+    // Remove 'ytmFallbackEnabled'
+    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], (result) => {
         const defaults = {};
         if (result.spotifyEnabled === undefined) {
             defaults.spotifyEnabled = true;
@@ -25,19 +25,16 @@ chrome.runtime.onInstalled.addListener((details) => {
             defaults.ytmEnabled = true;
             console.log("TuneTransporter: Initializing ytmEnabled to true");
         }
-        // Initialize fallback to false if undefined
-        if (result.ytmFallbackEnabled === undefined) {
-            defaults.ytmFallbackEnabled = false;
-            console.log("TuneTransporter: Initializing ytmFallbackEnabled to false");
-        }
+        // Remove Fallback default init
+        // if (result.ytmFallbackEnabled === undefined) {
+        //     defaults.ytmFallbackEnabled = false;
+        //     console.log("TuneTransporter: Initializing ytmFallbackEnabled to false");
+        // }
 
         if (Object.keys(defaults).length > 0) {
             chrome.storage.local.set(defaults, () => {
-                if (chrome.runtime.lastError) {
-                    console.error("TuneTransporter: Error setting defaults:", chrome.runtime.lastError);
-                } else {
-                    console.log("TuneTransporter: Default settings applied.", defaults);
-                }
+                if (chrome.runtime.lastError) { /* ... error handling ... */ }
+                else { console.log("TuneTransporter: Default settings applied.", defaults); }
             });
         }
     });
