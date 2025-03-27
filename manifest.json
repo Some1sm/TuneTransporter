@@ -35,5 +35,10 @@
       "js": [ "ytm2spotify-content.js" ],
       "run_at": "document_idle"
     }
+    { 
+      "matches": [ "*://www.youtube.com/watch*" ],
+      "js": [ "yt-fallback-content.js" ],
+      "run_at": "document_idle"
+    }
   ]
 }
