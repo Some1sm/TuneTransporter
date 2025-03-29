@@ -8,130 +8,146 @@ function spotifyToYTM() {
     const pathname = window.location.pathname;
     let isArtistSearch = false; // Flag for artist-only searches
 
+    // --- Helper for Title Regex Extraction ---
+    function _extractViaTitleRegex(regex, typeLabel, isArtistOnly = false) {
+        console.log(`TuneTransporter: Attempting ${typeLabel} title extraction (Plan A)...`);
+        const titleTagText = document.title;
+        const match = titleTagText.match(regex);
+        if (match && match[1]) {
+            const potentialItemOrArtist = match[1].trim();
+            const potentialArtistStr = !isArtistOnly ? match[2]?.trim() : null; // Artist is group 2 unless it's artist-only search
+
+            if (isArtistOnly) {
+                if (potentialItemOrArtist) {
+                    const processedArtist = processArtistString(potentialItemOrArtist);
+                    if (processedArtist) {
+                        console.log(`TuneTransporter: Extracted ${typeLabel} via Title (Plan A) - Artist: "${processedArtist}"`);
+                        return { item: null, artist: processedArtist };
+                    } else {
+                        console.warn(`TuneTransporter: ${typeLabel} title regex processed to empty artist (Plan A).`);
+                    }
+                } else {
+                    console.warn(`TuneTransporter: ${typeLabel} title regex matched empty potential artist (Plan A).`);
+                }
+            } else { // Track or Album/Single
+                if (potentialItemOrArtist && potentialArtistStr) {
+                    const processedArtist = processArtistString(potentialArtistStr);
+                    if (processedArtist) {
+                        console.log(`TuneTransporter: Extracted ${typeLabel} via Title (Plan A) - Item: "${potentialItemOrArtist}", Artist: "${processedArtist}"`);
+                        return { item: potentialItemOrArtist, artist: processedArtist };
+                    } else {
+                        console.warn(`TuneTransporter: ${typeLabel} title regex processed to empty artist (Plan A).`);
+                    }
+                } else {
+                    console.warn(`TuneTransporter: ${typeLabel} title regex matched empty groups (Plan A).`);
+                }
+            }
+        } else {
+            console.log(`TuneTransporter: ${typeLabel} title regex did not match.`);
+        }
+        return null; // Failed extraction
+    }
+
+    // --- Helper for DOM Extraction ---
+    function _extractViaDOM(titleSelector, artistSelector, typeLabel, isArtistOnly = false) {
+        console.log(`TuneTransporter: Attempting ${typeLabel} DOM extraction (Plan B)...`);
+        const titleElement = document.querySelector(titleSelector);
+        const artistElement = isArtistOnly ? null : document.querySelector(artistSelector); // Only need title for artist
+
+        if (isArtistOnly) {
+            if (titleElement) {
+                const potentialArtist = titleElement.textContent?.trim();
+                if (potentialArtist) {
+                    const processedArtist = processArtistString(potentialArtist);
+                    if (processedArtist) {
+                        console.log(`TuneTransporter: Extracted ${typeLabel} via DOM (Plan B) - Artist: "${processedArtist}"`);
+                        return { item: null, artist: processedArtist };
+                    } else {
+                        console.warn(`TuneTransporter: ${typeLabel} DOM extraction processed to empty artist (Plan B).`);
+                    }
+                } else {
+                    console.warn(`TuneTransporter: Found ${typeLabel} DOM element but text was empty (Plan B).`);
+                }
+            } else {
+                console.log(`TuneTransporter: Could not find ${typeLabel} DOM element (Plan B).`);
+            }
+        } else { // Track or Album/Single
+            if (titleElement && artistElement) {
+                const potentialItem = titleElement.textContent?.trim();
+                const potentialArtist = artistElement.textContent?.trim();
+                if (potentialItem && potentialArtist) {
+                    const processedArtist = processArtistString(potentialArtist);
+                    if (processedArtist) {
+                        console.log(`TuneTransporter: Extracted ${typeLabel} via DOM (Plan B) - Item: "${potentialItem}", Artist: "${processedArtist}"`);
+                        return { item: potentialItem, artist: processedArtist };
+                    } else {
+                        console.warn(`TuneTransporter: ${typeLabel} DOM extraction processed to empty artist (Plan B).`);
+                    }
+                } else {
+                    console.warn(`TuneTransporter: Found ${typeLabel} DOM elements but text was empty (Plan B).`);
+                }
+            } else {
+                console.log(`TuneTransporter: Could not find ${typeLabel} DOM elements (Plan B).`);
+            }
+        }
+        return null; // Failed extraction
+    }
+
     try {
         // --- Detect Page Type ---
         if (pathname.startsWith('/track/')) {
             console.log("TuneTransporter: Detected Spotify Track page.");
-            // --- Plan A: Track Title Regex ---
-            console.log("TuneTransporter: Attempting Track title extraction (Plan A)...");
-            const titleTagText = document.title;
-            const trackTitleMatch = titleTagText.match(/^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i);
-            if (trackTitleMatch && trackTitleMatch[1] && trackTitleMatch[2]) {
-                const potentialTrack = trackTitleMatch[1].trim();
-                const potentialArtistStr = trackTitleMatch[2];
-                if (potentialTrack && potentialArtistStr) {
-                    itemName = potentialTrack;
-                    artistName = processArtistString(potentialArtistStr);
-                    if (artistName) {
-                        console.log(`TuneTransporter: Extracted Track via Title (Plan A) - Item: "${itemName}", Artist: "${artistName}"`);
-                    } else { /* ... error handling ... */ }
-                } else { /* ... error handling ... */ }
-            } else { console.log("TuneTransporter: Track title regex did not match."); }
+            // --- Attempt Extraction ---
+            const titleRegex = /^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i;
+            let extractedData = _extractViaTitleRegex(titleRegex, 'Track');
 
-            // --- Plan B: Track DOM Query ---
-            if (!itemName || !artistName) {
-                console.log("TuneTransporter: Track Plan A failed or incomplete, trying DOM (Plan B)...");
-                const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
-                const artistElement = document.querySelector('a[data-testid="creator-link"]');
-                if (titleElement && artistElement) {
-                    const potentialTrack = titleElement.textContent?.trim();
-                    const potentialArtist = artistElement.textContent?.trim();
-                    if (potentialTrack && potentialArtist) {
-                        itemName = potentialTrack;
-                        artistName = processArtistString(potentialArtist);
-                        if (artistName) {
-                            console.log(`TuneTransporter: Extracted Track via DOM (Plan B) - Item: "${itemName}", Artist: "${artistName}"`);
-                        } else { /* ... error handling ... */ }
-                    } else { /* ... error handling ... */ }
-                } else { console.log("TuneTransporter: Could not find Track DOM elements."); }
+            if (!extractedData) { // If Plan A failed, try Plan B
+                const titleSelector = 'span[data-testid="entityTitle"] h1';
+                const artistSelector = 'a[data-testid="creator-link"]';
+                extractedData = _extractViaDOM(titleSelector, artistSelector, 'Track');
+            }
+
+            if (extractedData) {
+                itemName = extractedData.item;
+                artistName = extractedData.artist;
             }
 
 
         } else if (pathname.startsWith('/album/')) { // This covers Albums AND Singles
-            console.log("TuneTransporter: Detected Spotify Album/Single page."); // Updated log message
-            // --- Plan A: Album/Single Title Regex ---
-            console.log("TuneTransporter: Attempting Album/Single title extraction (Plan A)...");
-            const titleTagText = document.title;
-            // <<< MODIFIED REGEX: Accept 'album' OR 'single' >>>
-            const albumTitleMatch = titleTagText.match(/^(.+?)\s*[-–—]\s*(?:album|single)\s*by\s+(.+?)\s*(?:\| Spotify)?$/i);
-            if (albumTitleMatch && albumTitleMatch[1] && albumTitleMatch[2]) {
-                const potentialAlbum = albumTitleMatch[1].trim();
-                const potentialArtistStr = albumTitleMatch[2];
-                if (potentialAlbum && potentialArtistStr) {
-                    itemName = potentialAlbum;
-                    artistName = processArtistString(potentialArtistStr);
-                    if (artistName) {
-                        console.log(`TuneTransporter: Extracted Album/Single via Title (Plan A) - Item: "${itemName}", Artist: "${artistName}"`);
-                    } else {
-                        itemName = null; // Reset if artist processing failed
-                        console.log("TuneTransporter: Album/Single title regex processed to empty artist.");
-                    }
-                } else { console.log("TuneTransporter: Album/Single title regex matched empty groups."); }
-            } else { console.log("TuneTransporter: Album/Single title regex did not match."); } // Expected fail on pages not matching pattern
+            console.log("TuneTransporter: Detected Spotify Album/Single page.");
+            // --- Attempt Extraction ---
+            const titleRegex = /^(.+?)\s*[-–—]\s*(?:album|single)\s*by\s+(.+?)\s*(?:\| Spotify)?$/i;
+            let extractedData = _extractViaTitleRegex(titleRegex, 'Album/Single');
 
-            // --- Plan B: Album/Single DOM Query ---
-            // NOTE: Assuming selectors work for both Albums and Singles. If Plan B still fails
-            // specifically for Singles after Plan A is fixed, these selectors might need revisiting.
-            if (!itemName || !artistName) {
-                console.log("TuneTransporter: Album/Single Plan A failed or incomplete, trying DOM (Plan B)...");
-                const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
-                const artistElement = document.querySelector('a[data-testid="creator-link"]');
-                if (titleElement && artistElement) {
-                    const potentialAlbum = titleElement.textContent?.trim();
-                    const potentialArtist = artistElement.textContent?.trim();
-                    if (potentialAlbum && potentialArtist) {
-                        itemName = potentialAlbum;
-                        artistName = processArtistString(potentialArtist);
-                        if (artistName) {
-                            console.log(`TuneTransporter: Extracted Album/Single via DOM (Plan B) - Item: "${itemName}", Artist: "${artistName}"`);
-                        } else {
-                            itemName = null;
-                            console.log("TuneTransporter: Album/Single DOM extraction processed to empty artist.");
-                        }
-                    } else { console.log("TuneTransporter: Found Album/Single DOM elements but text was empty."); }
-                } else {
-                    // Log slightly differently if it failed Plan A already
-                    if (albumTitleMatch) { // Plan A matched but failed processing artist
-                        console.log("TuneTransporter: Could not find Album/Single DOM elements (Plan B).");
-                    } else { // Plan A didn't even match
-                        console.log("TuneTransporter: Could not find Album/Single DOM elements (Plan B fallback).");
-                    }
-                }
+            if (!extractedData) { // If Plan A failed, try Plan B
+                const titleSelector = 'span[data-testid="entityTitle"] h1';
+                const artistSelector = 'a[data-testid="creator-link"]';
+                extractedData = _extractViaDOM(titleSelector, artistSelector, 'Album/Single');
+            }
+
+            if (extractedData) {
+                itemName = extractedData.item;
+                artistName = extractedData.artist;
             }
 
 
         } else if (pathname.startsWith('/artist/')) {
             console.log("TuneTransporter: Detected Spotify Artist page.");
             isArtistSearch = true;
-            // --- Plan A: Artist Title Regex ---
-            console.log("TuneTransporter: Attempting Artist title extraction (Plan A)...");
-            const titleTagText = document.title;
-            const artistTitleMatch = titleTagText.match(/^(.+?)\s*(?:•.*?)?\s*(?:\| Spotify|- Listen on Spotify)\s*$/i);
-            if (artistTitleMatch && artistTitleMatch[1]) {
-                const potentialArtist = artistTitleMatch[1].trim();
-                if (potentialArtist) {
-                    artistName = processArtistString(potentialArtist);
-                    itemName = null;
-                    if (artistName) {
-                        console.log(`TuneTransporter: Extracted Artist via Title (Plan A) - Artist: "${artistName}"`);
-                    } else { /* ... error handling ... */ }
-                } else { /* ... error handling ... */ }
-            } else { console.log("TuneTransporter: Artist title regex did not match."); }
+            // --- Attempt Extraction ---
+            const titleRegex = /^(.+?)\s*(?:•.*?)?\s*(?:\| Spotify|- Listen on Spotify)\s*$/i;
+            // For artist pages, the first group (match[1]) is the artist name.
+            let extractedData = _extractViaTitleRegex(titleRegex, 'Artist', true); // isArtistOnly = true
 
-            // --- Plan B: Artist DOM Query ---
-            if (!artistName) {
-                console.log("TuneTransporter: Artist Plan A failed, trying DOM (Plan B)...");
-                const artistTitleElement = document.querySelector('span[data-testid="entityTitle"] h1');
-                if (artistTitleElement) {
-                    const potentialArtist = artistTitleElement.textContent?.trim();
-                    if (potentialArtist) {
-                        artistName = processArtistString(potentialArtist);
-                        itemName = null;
-                        if (artistName) {
-                            console.log(`TuneTransporter: Extracted Artist via DOM (Plan B) - Artist: "${artistName}"`);
-                        } else { /* ... error handling ... */ }
-                    } else { /* ... error handling ... */ }
-                } else { console.log("TuneTransporter: Could not find Artist DOM element (selector might need updating)."); }
+            if (!extractedData) { // If Plan A failed, try Plan B
+                const titleSelector = 'span[data-testid="entityTitle"] h1';
+                // We only need the title selector for artist pages.
+                extractedData = _extractViaDOM(titleSelector, null, 'Artist', true); // isArtistOnly = true
+            }
+
+            if (extractedData) {
+                // itemName is implicitly null for artist searches
+                artistName = extractedData.artist;
             }
 
 
