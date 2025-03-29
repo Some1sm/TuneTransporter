@@ -16,19 +16,6 @@ function showStatus(message, duration = 2500) {
     }
 }
 
-// --- Artist String Processing Logic (Duplicated for Injection Scope) ---
-// This function needs to be self-contained within the injected scope.
-function _processArtistStringForInjection(artistString) {
-    if (!artistString || typeof artistString !== 'string') return null;
-    let primaryArtistPart = artistString.trim();
-    if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-    if (primaryArtistPart.includes('�')) primaryArtistPart = primaryArtistPart.split('�')[0].trim();
-    const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
-    const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
-    return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
-}
-// ----------------------------------------------------------------------
-
 // --- Injectable Extraction Functions (for Copy feature) ---
 // Function to get data from Spotify page
 function getSpotifyData() {
@@ -190,6 +177,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }); // End chrome.tabs.query
 
+    // --- Helper to process script execution results ---
+    function _handleScriptResult(results, sourceType, actionType) {
+        if (results && results[0] && results[0].result) {
+            const data = results[0].result;
+            console.log(`Extracted data for ${actionType}:`, data);
+            // The check for data.artist is specific to the handlers, keep it there.
+            // if (!data.artist) {
+            //     throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
+            // }
+            return data; // Return the extracted data if successful
+        } else {
+            let errorMsg = `Failed to get data from ${sourceType} page for ${actionType} copy.`;
+            if (chrome.runtime.lastError) {
+                errorMsg += ` Error: ${chrome.runtime.lastError.message}`;
+            } else if (results && results[0] && results[0].result === null) {
+                // Be more specific if the script ran but found nothing
+                errorMsg = `Could not find required info on the ${sourceType} page.`;
+            }
+            console.error(`Extraction failed for ${actionType}:`, results, chrome.runtime.lastError);
+            throw new Error(errorMsg); // Throw an error to be caught by the caller
+        }
+    }
+
     // --- Handle Copy LINK Button Click (MODIFIED for Spotify Filters) ---
     async function handleCopyLinkClick(sourceType, tabId) {
         let injectionFunction;
@@ -210,14 +220,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 func: injectionFunction
             });
 
-            if (results && results[0] && results[0].result) {
-                const data = results[0].result; // Contains { type, item, artist }
-                console.log("Extracted data for link:", data);
+            const data = _handleScriptResult(results, sourceType, 'link'); // Use helper
 
-                if (!data.artist) throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
-
-                let searchQuery;
-                if (data.type === 'artist') searchQuery = data.artist;
+            // Proceed if helper didn't throw
+            let searchQuery;
+            if (data.type === 'artist') searchQuery = data.artist;
                 else if (data.item && data.artist) searchQuery = `${data.item} ${data.artist}`;
                 else searchQuery = data.artist; // Fallback
 
@@ -255,14 +262,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 showStatus(`Copied ${targetServiceName} link!`);
                 console.log(`Copied ${targetServiceName} search URL: ${targetSearchUrl}`);
 
-            } else {
-                let errorMsg = "Failed to get data from page.";
-                if (chrome.runtime.lastError) { errorMsg += ` Error: ${chrome.runtime.lastError.message}`; }
-                else if (results && results[0] && results[0].result === null) { errorMsg = `Could not find required info on the ${sourceType} page.`; }
-                console.error("Extraction failed for link:", results, chrome.runtime.lastError);
-                showStatus(errorMsg, 4000);
-            }
+            // The else block is now handled by the _handleScriptResult helper throwing an error
         } catch (error) {
+            // Catch errors from executeScript OR _handleScriptResult
             console.error(`Error during ${sourceType} link copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
@@ -283,14 +285,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 func: injectionFunction
             });
 
-            if (results && results[0] && results[0].result) {
-                const data = results[0].result;
-                console.log("Extracted data for info:", data);
+            const data = _handleScriptResult(results, sourceType, 'info'); // Use helper
 
-                if (!data.artist) throw new Error(`Could not format info: Artist data missing from extraction.`);
+            // Proceed if helper didn't throw
+            // Specific check for info formatting still needed
+            if (!data.artist) throw new Error(`Could not format info: Artist data missing from extraction.`);
 
-                // Format the string
-                let infoString = `Artist: ${data.artist}`;
+            // Format the string
+            let infoString = `Artist: ${data.artist}`;
                 if (data.item && data.type !== 'artist') {
                     let itemLabel = data.type.charAt(0).toUpperCase() + data.type.slice(1);
                     // Use specific labels based on source and type
@@ -310,14 +312,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 showStatus(`Copied page info!`);
                 console.log(`Copied info string: ${infoString}`);
 
-            } else {
-                let errorMsg = "Failed to get data from page for info copy.";
-                if (chrome.runtime.lastError) { errorMsg += ` Error: ${chrome.runtime.lastError.message}`; }
-                else if (results && results[0] && results[0].result === null) { errorMsg = `Could not find required info on the ${sourceType} page.`; }
-                console.error("Extraction failed for info:", results, chrome.runtime.lastError);
-                showStatus(errorMsg, 4000);
-            }
+            // The else block is now handled by the _handleScriptResult helper throwing an error
         } catch (error) {
+            // Catch errors from executeScript, _handleScriptResult, OR the specific artist check
             console.error(`Error during ${sourceType} info copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
