@@ -23,3 +23,48 @@ label {
 input[type="checkbox"] {
     margin-right: 8px; /* Space between checkbox and text */
 }
+
+/* ------- NEW STYLES FOR BUTTONS AND STATUS ------- */
+
+hr { /* Style for the separator */
+    margin-top: 15px;
+    margin-bottom: 10px;
+    border: 0;
+    border-top: 1px solid #ccc;
+}
+
+button {
+    display: block; /* Make buttons take full width */
+    width: 100%;
+    padding: 8px;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    font-size: 0.9em; /* Match status message size */
+}
+
+    button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    button:hover:not(:disabled) {
+        background-color: #eee;
+    }
+
+#statusMessage {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 0.9em;
+    min-height: 1.2em; /* Prevent layout shift when text appears/disappears */
+    color: #555; /* Optional: Dimmer color for status */
+}
+
+.popup-icon {
+    width: 18px; /* Or your desired size */
+    height: 18px; /* Or your desired size */
+    margin-right: 5px;
+    vertical-align: middle;
+}

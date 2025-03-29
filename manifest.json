@@ -10,9 +10,14 @@
     "128": "icons/icon128.jpeg"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
+    // Hosts needed for manifest content scripts AND executeScript
+    "*://open.spotify.com/*",
+    "*://music.youtube.com/*",
     "*://www.youtube.com/*" // <-- Needed for fallback script
   ],
   "action": {

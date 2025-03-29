@@ -3,15 +3,7 @@
 <head>
     <title>TuneTransporter</title>
     <link rel="stylesheet" href="popup.css">
-    <style>
-        /* Optional: Add some specific styling for the icons in the popup */
-        .popup-icon {
-            width: 18px; /* Adjust size as needed */
-            height: 18px;
-            margin-right: 5px; /* Space between icon and checkbox */
-            vertical-align: middle; /* Align icon nicely with text */
-        }
-    </style>
+    <!-- <style> block removed -->
 </head>
 <body>
     <h1>TuneTransporter</h1>
@@ -23,6 +15,14 @@
         <img src="resources/ytm_icon.svg" alt="YTM" class="popup-icon">
         <input type="checkbox" id="ytmToggle"> Enable YTM -> Spotify
     </label>
+
+    <hr> <!-- Separator -->
+
+    <button id="copyYtmLinkBtn" disabled>Copy YouTube Music Link</button>
+    <button id="copySpotifyLinkBtn" disabled>Copy Spotify Link</button>
+
+    <p id="statusMessage"></p> <!-- Area for status messages -->
+
     <script src="popup.js"></script>
 </body>
 </html>
