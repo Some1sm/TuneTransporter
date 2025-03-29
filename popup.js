@@ -44,19 +44,26 @@ function getSpotifyData() {
     const pathname = window.location.pathname;
     let item = null;
     let artist = null;
-    let type = null;
+    let type = null; // Spotify types: 'track', 'album', 'artist'
     try {
-        if (pathname.startsWith('/track/') || pathname.startsWith('/album/')) {
-            type = pathname.startsWith('/track/') ? 'track' : 'album';
+        if (pathname.startsWith('/track/')) {
+            type = 'track'; // <<< Set type
+            const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
+            const artistElement = document.querySelector('a[data-testid="creator-link"]');
+            if (titleElement) item = titleElement.textContent?.trim();
+            if (artistElement) artist = _processArtistString(artistElement.textContent);
+        } else if (pathname.startsWith('/album/')) {
+            type = 'album'; // <<< Set type
             const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
             const artistElement = document.querySelector('a[data-testid="creator-link"]');
             if (titleElement) item = titleElement.textContent?.trim();
             if (artistElement) artist = _processArtistString(artistElement.textContent);
         } else if (pathname.startsWith('/artist/')) {
-            type = 'artist';
+            type = 'artist'; // <<< Set type
             const artistTitleElement = document.querySelector('span[data-testid="entityTitle"] h1');
             if (artistTitleElement) artist = _processArtistString(artistTitleElement.textContent);
         }
+        // Return type along with item and artist
         return artist ? { type, item, artist } : null;
     } catch (e) { console.error("TuneTransporter Error (injected getSpotifyData):", e); return null; }
 }
@@ -75,20 +82,20 @@ function getYtmData() {
     const currentUrl = window.location.href;
     let item = null;
     let artist = null;
-    let type = null;
+    let type = null; // YTM types: 'playlist' (for album/playlist), 'artist', 'track'
     try {
         if (currentUrl.startsWith("https://music.youtube.com/playlist?list=")) {
-            type = 'playlist';
+            type = 'playlist'; // <<< Set type
             const titleElement = document.querySelector('ytmusic-responsive-header-renderer h1 yt-formatted-string.title');
             const artistElement = document.querySelector('ytmusic-responsive-header-renderer yt-formatted-string.strapline-text.complex-string');
             if (titleElement) item = titleElement.title?.trim();
             if (artistElement) artist = _processArtistString(artistElement.title);
         } else if (currentUrl.includes("/channel/")) {
-            type = 'artist';
+            type = 'artist'; // <<< Set type
             const artistElement = document.querySelector('ytmusic-immersive-header-renderer h1 yt-formatted-string.title');
             if (artistElement) artist = _processArtistString(artistElement.title);
         } else if (currentUrl.startsWith("https://music.youtube.com/watch")) {
-            type = 'track';
+            type = 'track'; // <<< Set type
             const titleElement = document.querySelector('ytmusic-player-queue-item[selected] .song-title');
             const artistElement = document.querySelector('ytmusic-player-queue-item[selected] .byline');
             if (titleElement) item = titleElement.title?.trim();
@@ -97,6 +104,7 @@ function getYtmData() {
                 artist = _processArtistString(rawArtistText);
             }
         }
+        // Return type along with item and artist
         return artist ? { type, item, artist } : null;
     } catch (e) { console.error("TuneTransporter Error (injected getYtmData):", e); return null; }
 }
@@ -108,7 +116,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const ytmToggle = document.getElementById('ytmToggle');
     const copyYtmLinkBtn = document.getElementById('copyYtmLinkBtn');
     const copySpotifyLinkBtn = document.getElementById('copySpotifyLinkBtn');
-    // --- Get reference to the new button ---
     const copyInfoBtn = document.getElementById('copyInfoBtn');
 
     // Load toggle settings
@@ -134,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showStatus(`Error: ${errorMsg}`, 0);
             copyYtmLinkBtn.disabled = true;
             copySpotifyLinkBtn.disabled = true;
-            copyInfoBtn.disabled = true; // Disable new button too
+            copyInfoBtn.disabled = true;
             return;
         }
 
@@ -144,21 +151,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let canCopyYtm = false;
         let canCopySpotify = false;
-        let canCopyInfo = false; // --- Flag for the new button ---
-        let currentSourceType = null; // Store 'spotify' or 'ytm'
+        let canCopyInfo = false;
+        let currentSourceType = null;
         let statusMsg = "";
 
         if (currentUrl.startsWith("https://open.spotify.com/")) {
             if (currentUrl.includes("/track/") || currentUrl.includes("/album/") || currentUrl.includes("/artist/")) {
                 canCopyYtm = true;
-                canCopyInfo = true; // Enable info copy
+                canCopyInfo = true;
                 currentSourceType = 'spotify';
             } else { statusMsg = "Not a Spotify track/album/artist."; }
         }
         else if (currentUrl.startsWith("https://music.youtube.com/")) {
             if (currentUrl.includes("/watch?") || currentUrl.includes("/playlist?list=") || currentUrl.includes("/channel/")) {
                 canCopySpotify = true;
-                canCopyInfo = true; // Enable info copy
+                canCopyInfo = true;
                 currentSourceType = 'ytm';
             } else { statusMsg = "Not a YTM song/playlist/artist."; }
         }
@@ -168,12 +175,11 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Set disabled states ---
         copyYtmLinkBtn.disabled = !canCopyYtm;
         copySpotifyLinkBtn.disabled = !canCopySpotify;
-        copyInfoBtn.disabled = !canCopyInfo; // Disable based on flag
+        copyInfoBtn.disabled = !canCopyInfo;
 
         // --- Set click handlers ---
         copyYtmLinkBtn.onclick = canCopyYtm ? () => handleCopyLinkClick('spotify', tabId) : null;
         copySpotifyLinkBtn.onclick = canCopySpotify ? () => handleCopyLinkClick('ytm', tabId) : null;
-        // --- Add click handler for the new button ---
         copyInfoBtn.onclick = canCopyInfo ? () => handleCopyInfoClick(currentSourceType, tabId) : null;
 
 
@@ -184,14 +190,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }); // End chrome.tabs.query
 
-    // --- Handle Copy LINK Button Click (Renamed for clarity) ---
+    // --- Handle Copy LINK Button Click (MODIFIED for Spotify Filters) ---
     async function handleCopyLinkClick(sourceType, tabId) {
         let injectionFunction;
         let targetServiceName;
 
-        if (sourceType === 'spotify') { injectionFunction = getSpotifyData; targetServiceName = "YouTube Music"; }
-        else if (sourceType === 'ytm') { injectionFunction = getYtmData; targetServiceName = "Spotify"; }
-        else { return; }
+        if (sourceType === 'spotify') {
+            injectionFunction = getSpotifyData;
+            targetServiceName = "YouTube Music";
+        } else if (sourceType === 'ytm') {
+            injectionFunction = getYtmData;
+            targetServiceName = "Spotify";
+        } else { return; }
 
         showStatus(`Getting data from ${sourceType}...`, 0);
         try {
@@ -201,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (results && results[0] && results[0].result) {
-                const data = results[0].result;
+                const data = results[0].result; // Contains { type, item, artist }
                 console.log("Extracted data for link:", data);
 
                 if (!data.artist) throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
@@ -212,8 +222,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 else searchQuery = data.artist; // Fallback
 
                 let targetSearchUrl;
-                if (targetServiceName === "YouTube Music") targetSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
-                else targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
+                if (targetServiceName === "YouTube Music") {
+                    // YTM URL - No change, use general search
+                    targetSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
+                } else { // Spotify URL - Apply filter based on extracted type
+                    let spotifyFilterType = null;
+                    // Map the TYPE extracted from YTM page to Spotify filter path
+                    switch (data.type) {
+                        case 'track':       // From YTM /watch
+                            spotifyFilterType = 'tracks';
+                            break;
+                        case 'playlist':    // From YTM /playlist?list= (used for albums/playlists)
+                            spotifyFilterType = 'albums';
+                            break;
+                        case 'artist':      // From YTM /channel
+                            spotifyFilterType = 'artists';
+                            break;
+                        default:
+                            console.warn(`Unexpected data type "${data.type}" from YTM, using general Spotify search.`);
+                    }
+
+                    // Construct Spotify URL with filter if available
+                    if (spotifyFilterType) {
+                        targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifyFilterType}`;
+                        console.log(`Applying Spotify filter: /${spotifyFilterType}`);
+                    } else {
+                        targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
+                    }
+                }
 
                 await navigator.clipboard.writeText(targetSearchUrl);
                 showStatus(`Copied ${targetServiceName} link!`);
@@ -232,13 +268,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } // End handleCopyLinkClick
 
-    // --- Handle Copy INFO Button Click ---
+    // --- Handle Copy INFO Button Click (No changes needed here) ---
     async function handleCopyInfoClick(sourceType, tabId) {
         let injectionFunction;
 
         if (sourceType === 'spotify') { injectionFunction = getSpotifyData; }
         else if (sourceType === 'ytm') { injectionFunction = getYtmData; }
-        else { return; } // Should not happen
+        else { return; }
 
         showStatus(`Getting data from ${sourceType}...`, 0);
         try {
@@ -251,31 +287,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = results[0].result;
                 console.log("Extracted data for info:", data);
 
-                // Artist is mandatory based on extraction logic returning non-null
-                if (!data.artist) {
-                    throw new Error(`Could not format info: Artist data missing from extraction.`);
-                }
+                if (!data.artist) throw new Error(`Could not format info: Artist data missing from extraction.`);
 
                 // Format the string
                 let infoString = `Artist: ${data.artist}`;
                 if (data.item && data.type !== 'artist') {
-                    // Capitalize type (Track, Album, Playlist)
                     let itemLabel = data.type.charAt(0).toUpperCase() + data.type.slice(1);
+                    // Use specific labels based on source and type
+                    if (sourceType === 'ytm' && data.type === 'playlist') {
+                        itemLabel = 'Playlist/Album'; // Clarify YTM playlist type
+                    } else if (sourceType === 'spotify' && data.type === 'album') {
+                        itemLabel = 'Album';
+                    } else { // track
+                        itemLabel = 'Track';
+                    }
                     infoString += `, ${itemLabel}: ${data.item}`;
                 } else if (!data.item && data.type !== 'artist') {
-                    // Only artist was found for a non-artist page (less likely now)
                     console.warn("Info formatting: Item missing for non-artist type.");
-                    // infoString remains "Artist: [Name]"
                 }
-                // For type 'artist', infoString is already correct ("Artist: [Name]")
 
-                // Copy to clipboard
                 await navigator.clipboard.writeText(infoString);
                 showStatus(`Copied page info!`);
                 console.log(`Copied info string: ${infoString}`);
 
             } else {
-                // Handle extraction failures
                 let errorMsg = "Failed to get data from page for info copy.";
                 if (chrome.runtime.lastError) { errorMsg += ` Error: ${chrome.runtime.lastError.message}`; }
                 else if (results && results[0] && results[0].result === null) { errorMsg = `Could not find required info on the ${sourceType} page.`; }
@@ -286,6 +321,6 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error(`Error during ${sourceType} info copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
-    } 
+    } // End handleCopyInfoClick
 
-}); 
+}); // End DOMContentLoaded

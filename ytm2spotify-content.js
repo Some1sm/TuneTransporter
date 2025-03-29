@@ -5,7 +5,7 @@ console.log("TuneTransporter: YouTube Music to Spotify script loaded.");
 // --- Constants ---
 const YTM_OBSERVER_TIMEOUT_MS = 10000; // 10 seconds timeout for watch pages
 
-// Selectors (Keep as they are)
+// Selectors
 const YTM_PLAYLIST_TITLE_SELECTOR = 'ytmusic-responsive-header-renderer h1 yt-formatted-string.title';
 const YTM_PLAYLIST_ARTIST_SELECTOR = 'ytmusic-responsive-header-renderer yt-formatted-string.strapline-text.complex-string';
 const YTM_ARTIST_NAME_SELECTOR = 'ytmusic-immersive-header-renderer h1 yt-formatted-string.title';
@@ -19,9 +19,10 @@ const YTM_WATCH_ARTIST_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .byline`;
 function tryExtractAndRedirect() {
     const currentUrl = window.location.href;
     let itemName = null;
-    let artistName = null; // Will hold the processed name
+    let artistName = null;
     let extracted = false;
     let isArtistSearch = false;
+    let spotifySearchType = null; // <<< NEW: To store 'tracks', 'albums', or 'artists'
 
     if (currentUrl.startsWith("https://music.youtube.com/watch")) {
         console.log("TuneTransporter: Skipping direct extraction on watch page (observer handles this).");
@@ -37,11 +38,11 @@ function tryExtractAndRedirect() {
 
             if (titleElement && titleElement.title && artistElement && artistElement.title) {
                 itemName = titleElement.title.trim();
-                // *** Use processArtistString from utils.js ***
                 artistName = processArtistString(artistElement.title); // Pass the raw title
 
                 if (itemName && artistName) { // Check if both are valid after processing
                     extracted = true;
+                    spotifySearchType = 'albums'; // <<< SET TYPE: Use 'albums' for playlists/albums
                     console.log(`TuneTransporter: Extracted Playlist/Album - Item: "${itemName}", Artist: "${artistName}"`);
                 } else {
                     console.warn("TuneTransporter: Playlist/Album elements found, but text was empty after processing.");
@@ -58,13 +59,13 @@ function tryExtractAndRedirect() {
             const artistElement = document.querySelector(YTM_ARTIST_NAME_SELECTOR);
             if (artistElement && artistElement.title) {
                 const rawArtistName = artistElement.title.trim();
-                // *** Use processArtistString from utils.js ***
                 artistName = processArtistString(rawArtistName);
                 itemName = null;
 
                 if (artistName) { // Check if valid after processing
                     extracted = true;
                     isArtistSearch = true;
+                    spotifySearchType = 'artists'; // <<< SET TYPE
                     console.log(`TuneTransporter: Extracted Artist - Artist: "${artistName}"`);
                 } else {
                     console.warn("TuneTransporter: Artist element found, but text was empty after processing.");
@@ -86,23 +87,34 @@ function tryExtractAndRedirect() {
             let searchQuery;
             if (isArtistSearch) {
                 searchQuery = artistName;
-                console.log(`TuneTransporter: Preparing Spotify search for artist: "${searchQuery}"`);
             } else if (itemName) {
                 searchQuery = itemName + " " + artistName;
-                console.log(`TuneTransporter: Preparing Spotify search for item: "${itemName}", artist: "${artistName}"`);
             } else {
+                // Should only happen if itemName extraction failed for playlist/album but artist was found (unlikely with current checks)
                 console.error("TuneTransporter: Artist found but item missing for non-artist search.");
                 showFeedback("TuneTransporter: Error preparing search query.");
                 return;
             }
 
-            const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
+            let spotifySearchUrl;
+            // <<< MODIFIED: Construct URL with type filter if available
+            if (spotifySearchType) {
+                spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifySearchType}`;
+                console.log(`TuneTransporter: Preparing Spotify search with filter '${spotifySearchType}': "${searchQuery}"`);
+            } else {
+                // Fallback to general search if type wasn't determined (shouldn't happen with current logic)
+                spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
+                console.warn(`TuneTransporter: Spotify search type filter not determined. Using general search for: "${searchQuery}"`);
+            }
+
             console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
             window.location.href = spotifySearchUrl;
+
         } else if (extracted && !artistName) {
             console.warn("TuneTransporter: Extraction seemed successful but artist name is missing after processing.");
             showFeedback("TuneTransporter: Could not extract required artist information.");
         }
+        // If not extracted, feedback was likely shown already in the specific block
 
     } catch (error) {
         console.error("TuneTransporter: Error during YTM to Spotify redirection:", error);
@@ -110,7 +122,7 @@ function tryExtractAndRedirect() {
     }
 }
 
-// Observer is only initialized if main ytmEnabled is true
+// Observer for watch pages
 function initializeWatchPageObserver() {
     console.log("TuneTransporter: Initializing observer for watch page.");
 
@@ -149,13 +161,11 @@ function initializeWatchPageObserver() {
         const artistElement = document.querySelector(YTM_WATCH_ARTIST_SELECTOR);
 
         if (songTitleElement && artistElement) {
-            // Prefer 'title' attribute, fall back to textContent if necessary
             const rawTitle = songTitleElement.title?.trim() || songTitleElement.textContent?.trim();
             const rawArtist = artistElement.title?.trim() || artistElement.textContent?.trim();
 
             if (rawTitle && rawArtist) {
-                const trackName = rawTitle; // Title usually doesn't need complex processing
-                // *** Use processArtistString from utils.js ***
+                const trackName = rawTitle;
                 const artistName = processArtistString(rawArtist);
 
                 if (trackName && artistName) { // Check if valid after processing
@@ -164,9 +174,16 @@ function initializeWatchPageObserver() {
                     redirectionAttempted = true;
                     cleanup("Primary redirection successful");
 
-                    const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(trackName + " " + artistName)}`;
+                    const searchQuery = trackName + " " + artistName;
+                    const spotifySearchType = 'tracks'; // <<< SET TYPE for watch pages
+
+                    // <<< MODIFIED: Construct URL with type filter
+                    const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifySearchType}`;
+                    console.log(`TuneTransporter: Preparing Spotify search with filter '${spotifySearchType}': "${searchQuery}"`);
+
+
                     console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
-                    window.location.href = spotifySearchUrl;
+                    window.location.href = spotifySearchUrl; // Perform the redirect
                     // ---------------------------------------
                 } else {
                     // Processing resulted in empty fields
@@ -184,8 +201,6 @@ function initializeWatchPageObserver() {
         subtree: true,
         attributes: true,
         attributeFilter: ['title', 'class'] // Watch title changes, also class changes (like 'selected')
-        // Consider observing textContent changes too if 'title' isn't always reliable
-        // characterData: true
     });
     console.log("TuneTransporter: YTM Watch observer started.");
 }
@@ -193,14 +208,16 @@ function initializeWatchPageObserver() {
 
 // --- Main execution ---
 chrome.storage.local.get(['ytmEnabled'], function (result) {
-    if (result.ytmEnabled !== false) {
+    if (result.ytmEnabled !== false) { // If primary YTM->Spotify is enabled...
+        // Use a timeout to allow the page (especially watch pages) to potentially load dynamic content
         setTimeout(() => {
+            // Decide whether to run observer or direct extraction based on page type
             if (window.location.href.startsWith("https://music.youtube.com/watch")) {
                 initializeWatchPageObserver();
             } else {
-                tryExtractAndRedirect();
+                tryExtractAndRedirect(); // Handles playlist/album/artist pages
             }
-        }, 200);
+        }, 200); // Small delay
     } else {
         console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
     }
