@@ -19,37 +19,20 @@ function showStatus(message, duration = 2500) {
 // --- Artist String Processing Logic (Duplicated for Injection Scope) ---
 // This function needs to be self-contained within the injected scope.
 function _processArtistStringForInjection(artistString) {
-    if (!artistString || typeof artistString !== 'string') {
-        return null; // Return null for invalid input
-    }
-
+    if (!artistString || typeof artistString !== 'string') return null;
     let primaryArtistPart = artistString.trim();
-
-    // 1. Handle YTM style separators
-    if (primaryArtistPart.includes('•')) {
-        primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-    }
-    if (primaryArtistPart.includes('�')) { // Handle specific weird character
-        primaryArtistPart = primaryArtistPart.split('�')[0].trim();
-    }
-
-    // 2. Handle common collaboration/separator patterns
+    if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
+    if (primaryArtistPart.includes('�')) primaryArtistPart = primaryArtistPart.split('�')[0].trim();
     const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
-
-    // 3. Clean up and join
-    const cleanedArtists = artists.map(artist => artist.trim()).filter(Boolean);
-
-    // 4. Return processed string or null
+    const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
     return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
 }
 // ----------------------------------------------------------------------
 
 // --- Injectable Extraction Functions (for Copy feature) ---
-
 // Function to get data from Spotify page
 function getSpotifyData() {
-    // --- Re-define the processing function INSIDE the injection scope ---
-    function _processArtistString(artistString) {
+    function _processArtistString(artistString) { // Internal helper
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
@@ -58,40 +41,29 @@ function getSpotifyData() {
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
     }
-    // ---------------------------------------------------------------------
-
     const pathname = window.location.pathname;
     let item = null;
-    let artist = null; // Will hold processed artist name
+    let artist = null;
     let type = null;
-
     try {
         if (pathname.startsWith('/track/') || pathname.startsWith('/album/')) {
             type = pathname.startsWith('/track/') ? 'track' : 'album';
             const titleElement = document.querySelector('span[data-testid="entityTitle"] h1');
             const artistElement = document.querySelector('a[data-testid="creator-link"]');
             if (titleElement) item = titleElement.textContent?.trim();
-            // Process artist name if found
-            if (artistElement) artist = _processArtistString(artistElement.textContent); // Use internal helper
-
+            if (artistElement) artist = _processArtistString(artistElement.textContent);
         } else if (pathname.startsWith('/artist/')) {
             type = 'artist';
             const artistTitleElement = document.querySelector('span[data-testid="entityTitle"] h1');
-            // Process artist name if found
-            if (artistTitleElement) artist = _processArtistString(artistTitleElement.textContent); // Use internal helper
+            if (artistTitleElement) artist = _processArtistString(artistTitleElement.textContent);
         }
-        // Return null only if processed artist is null/empty
         return artist ? { type, item, artist } : null;
-    } catch (e) {
-        console.error("TuneTransporter Error (injected getSpotifyData):", e);
-        return null; // Indicate failure on error
-    }
+    } catch (e) { console.error("TuneTransporter Error (injected getSpotifyData):", e); return null; }
 }
 
 // Function to get data from YTM page
 function getYtmData() {
-    // --- Re-define the processing function INSIDE the injection scope ---
-    function _processArtistString(artistString) {
+    function _processArtistString(artistString) { // Internal helper
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
@@ -100,45 +72,33 @@ function getYtmData() {
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
     }
-    // ---------------------------------------------------------------------
-
     const currentUrl = window.location.href;
     let item = null;
-    let artist = null; // Will hold processed artist name
+    let artist = null;
     let type = null;
-
     try {
         if (currentUrl.startsWith("https://music.youtube.com/playlist?list=")) {
-            type = 'playlist'; // Could be album/single too
+            type = 'playlist';
             const titleElement = document.querySelector('ytmusic-responsive-header-renderer h1 yt-formatted-string.title');
             const artistElement = document.querySelector('ytmusic-responsive-header-renderer yt-formatted-string.strapline-text.complex-string');
             if (titleElement) item = titleElement.title?.trim();
-            // Process artist name if found
-            if (artistElement) artist = _processArtistString(artistElement.title); // Use internal helper
-
+            if (artistElement) artist = _processArtistString(artistElement.title);
         } else if (currentUrl.includes("/channel/")) {
             type = 'artist';
             const artistElement = document.querySelector('ytmusic-immersive-header-renderer h1 yt-formatted-string.title');
-            // Process artist name if found
-            if (artistElement) artist = _processArtistString(artistElement.title); // Use internal helper
-
+            if (artistElement) artist = _processArtistString(artistElement.title);
         } else if (currentUrl.startsWith("https://music.youtube.com/watch")) {
             type = 'track';
             const titleElement = document.querySelector('ytmusic-player-queue-item[selected] .song-title');
             const artistElement = document.querySelector('ytmusic-player-queue-item[selected] .byline');
             if (titleElement) item = titleElement.title?.trim();
-            // Process artist name if found (prefer title, fallback to textContent)
             if (artistElement) {
                 let rawArtistText = artistElement.title?.trim() || artistElement.textContent?.trim();
-                artist = _processArtistString(rawArtistText); // Use internal helper
+                artist = _processArtistString(rawArtistText);
             }
         }
-        // Return null only if processed artist is null/empty
         return artist ? { type, item, artist } : null;
-    } catch (e) {
-        console.error("TuneTransporter Error (injected getYtmData):", e);
-        return null; // Indicate failure on error
-    }
+    } catch (e) { console.error("TuneTransporter Error (injected getYtmData):", e); return null; }
 }
 
 
@@ -148,6 +108,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const ytmToggle = document.getElementById('ytmToggle');
     const copyYtmLinkBtn = document.getElementById('copyYtmLinkBtn');
     const copySpotifyLinkBtn = document.getElementById('copySpotifyLinkBtn');
+    // --- Get reference to the new button ---
+    const copyInfoBtn = document.getElementById('copyInfoBtn');
 
     // Load toggle settings
     chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
@@ -172,6 +134,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showStatus(`Error: ${errorMsg}`, 0);
             copyYtmLinkBtn.disabled = true;
             copySpotifyLinkBtn.disabled = true;
+            copyInfoBtn.disabled = true; // Disable new button too
             return;
         }
 
@@ -181,35 +144,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let canCopyYtm = false;
         let canCopySpotify = false;
+        let canCopyInfo = false; // --- Flag for the new button ---
+        let currentSourceType = null; // Store 'spotify' or 'ytm'
         let statusMsg = "";
 
         if (currentUrl.startsWith("https://open.spotify.com/")) {
             if (currentUrl.includes("/track/") || currentUrl.includes("/album/") || currentUrl.includes("/artist/")) {
                 canCopyYtm = true;
+                canCopyInfo = true; // Enable info copy
+                currentSourceType = 'spotify';
             } else { statusMsg = "Not a Spotify track/album/artist."; }
         }
         else if (currentUrl.startsWith("https://music.youtube.com/")) {
             if (currentUrl.includes("/watch?") || currentUrl.includes("/playlist?list=") || currentUrl.includes("/channel/")) {
                 canCopySpotify = true;
+                canCopyInfo = true; // Enable info copy
+                currentSourceType = 'ytm';
             } else { statusMsg = "Not a YTM song/playlist/artist."; }
         }
         else if (currentUrl.startsWith("https://www.youtube.com/watch")) { statusMsg = "Copying not supported here."; }
         else { statusMsg = "Not on Spotify or YTM."; }
 
+        // --- Set disabled states ---
         copyYtmLinkBtn.disabled = !canCopyYtm;
         copySpotifyLinkBtn.disabled = !canCopySpotify;
-        copyYtmLinkBtn.onclick = canCopyYtm ? () => handleCopyClick('spotify', tabId) : null;
-        copySpotifyLinkBtn.onclick = canCopySpotify ? () => handleCopyClick('ytm', tabId) : null;
+        copyInfoBtn.disabled = !canCopyInfo; // Disable based on flag
 
-        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && statusMsg) {
+        // --- Set click handlers ---
+        copyYtmLinkBtn.onclick = canCopyYtm ? () => handleCopyLinkClick('spotify', tabId) : null;
+        copySpotifyLinkBtn.onclick = canCopySpotify ? () => handleCopyLinkClick('ytm', tabId) : null;
+        // --- Add click handler for the new button ---
+        copyInfoBtn.onclick = canCopyInfo ? () => handleCopyInfoClick(currentSourceType, tabId) : null;
+
+
+        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && copyInfoBtn.disabled && statusMsg) {
             showStatus(statusMsg, 0);
         } else {
             showStatus("");
         }
     }); // End chrome.tabs.query
 
-    // --- Handle Copy Button Click (async function) ---
-    async function handleCopyClick(sourceType, tabId) {
+    // --- Handle Copy LINK Button Click (Renamed for clarity) ---
+    async function handleCopyLinkClick(sourceType, tabId) {
         let injectionFunction;
         let targetServiceName;
 
@@ -221,38 +197,23 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
-                func: injectionFunction // This function now includes the processing logic internally
+                func: injectionFunction
             });
 
             if (results && results[0] && results[0].result) {
                 const data = results[0].result;
-                console.log("Extracted data:", data);
+                console.log("Extracted data for link:", data);
 
-                // Artist is mandatory (checked within the injection function now)
-                if (!data.artist) {
-                    // This path is less likely if injection succeeded and returned non-null,
-                    // as the injection function itself checks for artist.
-                    throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
-                }
+                if (!data.artist) throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
 
                 let searchQuery;
+                if (data.type === 'artist') searchQuery = data.artist;
+                else if (data.item && data.artist) searchQuery = `${data.item} ${data.artist}`;
+                else searchQuery = data.artist; // Fallback
+
                 let targetSearchUrl;
-
-                if (data.type === 'artist') {
-                    searchQuery = data.artist; // Already processed artist name
-                } else if (data.item && data.artist) {
-                    searchQuery = `${data.item} ${data.artist}`; // Use processed artist name
-                } else {
-                    // Fallback: Should ideally not happen if item is expected but missing
-                    searchQuery = data.artist;
-                    console.warn("Item name not found, using artist only for search query.");
-                }
-
-                if (targetServiceName === "YouTube Music") {
-                    targetSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
-                } else {
-                    targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
-                }
+                if (targetServiceName === "YouTube Music") targetSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
+                else targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
 
                 await navigator.clipboard.writeText(targetSearchUrl);
                 showStatus(`Copied ${targetServiceName} link!`);
@@ -261,16 +222,70 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 let errorMsg = "Failed to get data from page.";
                 if (chrome.runtime.lastError) { errorMsg += ` Error: ${chrome.runtime.lastError.message}`; }
-                else if (results && results[0] && results[0].result === null) {
-                    errorMsg = `Could not find required info on the ${sourceType} page.`;
-                }
-                console.error("Extraction failed:", results, chrome.runtime.lastError);
+                else if (results && results[0] && results[0].result === null) { errorMsg = `Could not find required info on the ${sourceType} page.`; }
+                console.error("Extraction failed for link:", results, chrome.runtime.lastError);
                 showStatus(errorMsg, 4000);
             }
         } catch (error) {
-            console.error(`Error during ${sourceType} copy process:`, error);
+            console.error(`Error during ${sourceType} link copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
-    } // End handleCopyClick
+    } // End handleCopyLinkClick
+
+    // --- Handle Copy INFO Button Click (New Function) ---
+    async function handleCopyInfoClick(sourceType, tabId) {
+        let injectionFunction;
+
+        if (sourceType === 'spotify') { injectionFunction = getSpotifyData; }
+        else if (sourceType === 'ytm') { injectionFunction = getYtmData; }
+        else { return; } // Should not happen
+
+        showStatus(`Getting data from ${sourceType}...`, 0);
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: injectionFunction
+            });
+
+            if (results && results[0] && results[0].result) {
+                const data = results[0].result;
+                console.log("Extracted data for info:", data);
+
+                // Artist is mandatory based on extraction logic returning non-null
+                if (!data.artist) {
+                    throw new Error(`Could not format info: Artist data missing from extraction.`);
+                }
+
+                // Format the string
+                let infoString = `Artist: ${data.artist}`;
+                if (data.item && data.type !== 'artist') {
+                    // Capitalize type (Track, Album, Playlist)
+                    let itemLabel = data.type.charAt(0).toUpperCase() + data.type.slice(1);
+                    infoString += `, ${itemLabel}: ${data.item}`;
+                } else if (!data.item && data.type !== 'artist') {
+                    // Only artist was found for a non-artist page (less likely now)
+                    console.warn("Info formatting: Item missing for non-artist type.");
+                    // infoString remains "Artist: [Name]"
+                }
+                // For type 'artist', infoString is already correct ("Artist: [Name]")
+
+                // Copy to clipboard
+                await navigator.clipboard.writeText(infoString);
+                showStatus(`Copied page info!`);
+                console.log(`Copied info string: ${infoString}`);
+
+            } else {
+                // Handle extraction failures
+                let errorMsg = "Failed to get data from page for info copy.";
+                if (chrome.runtime.lastError) { errorMsg += ` Error: ${chrome.runtime.lastError.message}`; }
+                else if (results && results[0] && results[0].result === null) { errorMsg = `Could not find required info on the ${sourceType} page.`; }
+                console.error("Extraction failed for info:", results, chrome.runtime.lastError);
+                showStatus(errorMsg, 4000);
+            }
+        } catch (error) {
+            console.error(`Error during ${sourceType} info copy process:`, error);
+            showStatus(`Error: ${error.message}`, 4000);
+        }
+    } // End handleCopyInfoClick
 
 }); // End DOMContentLoaded
