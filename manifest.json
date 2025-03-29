@@ -16,10 +16,9 @@
     "tabs"
   ],
   "host_permissions": [
-    // Hosts needed for manifest content scripts AND executeScript
     "*://open.spotify.com/*",
     "*://music.youtube.com/*",
-    "*://www.youtube.com/*" // Needed for fallback script and fallback target
+    "*://www.youtube.com/*" 
   ],
   "action": {
     "default_popup": "popup.html"
@@ -34,7 +33,6 @@
         "https://open.spotify.com/album/*",
         "https://open.spotify.com/artist/*"
       ],
-      // Load utils.js first so showFeedback is available
       "js": [ "utils.js", "spotify2ytm-content.js" ],
       "run_at": "document_idle"
     },
@@ -44,11 +42,10 @@
         "https://music.youtube.com/playlist?list=*",
         "https://music.youtube.com/channel/*"
       ],
-      // Load utils.js first so showFeedback is available
       "js": [ "utils.js", "ytm2spotify-content.js" ],
       "run_at": "document_idle"
     },
-    { // Fallback script doesn't currently use showFeedback, so no utils needed here
+    { 
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [ "yt-fallback-content.js" ],
       "run_at": "document_idle"
