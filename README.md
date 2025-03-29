@@ -1,6 +1,6 @@
 # TuneTransporter - Chrome Extension
 
-TuneTransporter is a Chrome extension that seamlessly bridges Spotify and YouTube Music. It automatically redirects music links between the two services and provides tools to easily copy converted links.
+TuneTransporter is a Chrome extension that seamlessly bridges Spotify and YouTube Music. It automatically redirects music links between the two services and provides tools to easily copy converted links and raw track information.
 
 ## Features
 
@@ -10,22 +10,15 @@ TuneTransporter is a Chrome extension that seamlessly bridges Spotify and YouTub
 *   **Robust Extraction:** Uses the best available methods to identify music details:
     *   **Spotify:** Tries parsing the page title first, then falls back to querying specific `data-testid` attributes in the DOM for increased reliability.
     *   **YouTube Music:** Uses specific CSS selectors for headers on playlist/album/artist pages and a `MutationObserver` to reliably catch song/artist info on dynamically loaded watch pages.
-*   **YTM Watch Page Fallback:** If the primary extraction method fails on a YTM song page (`watch?v=...`), and the YTM->Spotify direction is enabled, the extension will attempt a fallback:
-    1.  Redirects briefly to the corresponding `www.youtube.com` video page.
-    2.  Attempts to extract the video title and channel name there (less accurate).
-    3.  Redirects to a Spotify search using that information.
-    *(This fallback uses the main YTM->Spotify toggle).*
+*   **YTM Watch Page Fallback:** If the primary extraction method fails on a YTM song page (`watch?v=...`), and the YTM->Spotify direction is enabled, the extension will attempt a fallback (redirecting via `www.youtube.com` to extract info). *(This fallback uses the main YTM->Spotify toggle).*
 *   **Popup Controls:**
     *   Access the popup via the extension icon in your toolbar.
-    *   Independent toggles (with service icons) to enable/disable **Spotify -> YTM** and **YTM -> Spotify** automatic redirection.
-    *   Settings are saved and persist across browser sessions.
-*   **Copy Converted Link:**
-    *   Buttons within the popup allow you to easily copy a search link for the *other* service based on the page you are currently viewing.
-    *   If you're on a supported Spotify page, the "Copy YouTube Music Link" button will be active.
-    *   If you're on a supported YouTube Music page, the "Copy Spotify Link" button will be active.
-    *   Uses the same robust extraction methods as the automatic redirection to generate the link.
+    *   Independent toggles (with service icons) to enable/disable **Spotify -> YTM** and **YTM -> Spotify** automatic redirection. Settings are saved.
+    *   **Copy Converted Link:** Buttons to easily copy a search link for the *other* service based on the page you are currently viewing (Spotify -> YTM link, YTM -> Spotify link).
+    *   **Copy Raw Info:** (NEW!) A button to copy the extracted artist and track/album/playlist name as plain text (e.g., "Artist: Queen, Track: Bohemian Rhapsody") to your clipboard. Useful for pasting into searches or documents.
+    *   Buttons are enabled/disabled based on whether you are on a supported page.
     *   Provides status feedback within the popup ("Copying...", "Copied!", "Error...", etc.).
-*   **Visual Feedback:** Displays a temporary notification overlay on the page if automatic redirection fails (e.g., due to missing song/album/artist info or timeouts), explaining why it didn't work.
+*   **Visual Feedback:** Displays a temporary notification overlay on the page if automatic redirection fails (e.g., due to missing info or timeouts).
 
 ## Installation
 
@@ -40,11 +33,13 @@ TuneTransporter is a Chrome extension that seamlessly bridges Spotify and YouTub
 
 1.  **Enable Redirection:** Click the TuneTransporter icon in your Chrome toolbar. Use the toggles to enable the automatic redirection direction(s) you want (both are enabled by default).
 2.  **Automatic Redirect:** Simply open a supported Spotify or YouTube Music link in your browser. If the relevant toggle is enabled, you'll be automatically redirected to a search on the other service.
-3.  **Copy Link:**
+3.  **Copy Link / Info:**
     *   Navigate to a supported Spotify or YouTube Music page (track, album, artist, song, playlist, channel).
     *   Click the TuneTransporter icon.
-    *   The relevant "Copy [Other Service] Link" button should be enabled. Click it.
-    *   A search URL for the other service will be copied to your clipboard.
+    *   The relevant buttons should be enabled:
+        *   Click "Copy YouTube Music Link" (if on Spotify) or "Copy Spotify Link" (if on YTM) to copy a search URL for the other service.
+        *   (NEW!) Click "Copy Track/Page Info" to copy the extracted artist and item name as plain text to your clipboard.
+    *   The link or text will be copied to your clipboard. Check the status message in the popup for confirmation or errors.
 
 ## Supported Pages
 
@@ -63,16 +58,16 @@ TuneTransporter is a Chrome extension that seamlessly bridges Spotify and YouTub
 ## Troubleshooting
 
 *   **No Automatic Redirection:** Check the relevant toggle in the popup. Ensure you're on a supported URL. Make sure the extension is enabled in `chrome://extensions/`.
-*   **Copy Button Disabled:** Ensure you are on a supported Spotify or YouTube Music page (not `www.youtube.com`, `chrome://...`, New Tab Page, etc.). Reload the page and reopen the popup.
+*   **Copy Buttons Disabled:** Ensure you are on a supported Spotify or YouTube Music page (not `www.youtube.com`, `chrome://...`, New Tab Page, etc.). Reload the page and reopen the popup.
 *   **Feedback Message Appears:** If you see a notification like "TuneTransporter: Could not find..." or "...Timed out...", the automatic redirection failed to extract necessary details. The fallback might still trigger for YTM watch pages if enabled.
-*   **Copying Fails:** If you click copy and get an error message in the popup, check the popup's console (Right-click extension icon -> Inspect popup -> Console) and the main page's console (F12) for errors.
+*   **Copying Fails:** If you click a copy button and get an error message in the popup, check the popup's console (Right-click extension icon -> Inspect popup -> Console) and the main page's console (F12) for errors.
 *   **Console Errors:** Check the browser's developer console (F12) on the relevant music page, the popup's console, and the extension's service worker console (`chrome://extensions/` -> TuneTransporter -> "Service worker") for detailed error messages.
 
 ## Permissions
 
 *   **`storage`:** Used to save the state of the popup toggle switches across browser sessions.
-*   **`scripting`:** Needed by the popup to inject small scripts (`executeScript`) into Spotify/YTM pages to extract data accurately for the "Copy Link" feature.
-*   **`tabs`:** Required by the popup to read the URL of the currently active tab (`chrome.tabs.query`) to determine which "Copy Link" button should be enabled.
+*   **`scripting`:** Needed by the popup to inject small scripts (`executeScript`) into Spotify/YTM pages to extract data accurately for the "Copy Link" and "Copy Info" features.
+*   **`tabs`:** Required by the popup to read the URL of the currently active tab (`chrome.tabs.query`) to determine which "Copy" buttons should be enabled.
 *   **`host_permissions` (`*://open.spotify.com/*`, `*://music.youtube.com/*`, `*://www.youtube.com/*`):** Grants permission for the extension to run its automatic content scripts and injected scripts (for copying/fallback) on these specific domains.
 
 ## Limitations
