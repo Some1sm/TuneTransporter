@@ -40,10 +40,6 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
 });
 
-// --- Context Menu Click Handler (Currently unused but harmless to keep) ---
-// chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-//    // ... logic if context menus are added later ...
-// });
 
 // Optional: Listener for browser startup
 chrome.runtime.onStartup.addListener(() => {

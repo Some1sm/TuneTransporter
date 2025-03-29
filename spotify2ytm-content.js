@@ -1,8 +1,6 @@
 ﻿// TuneTransporter/spotify2ytm-content.js
-// NOTE: showFeedback and processArtistString functions are now loaded from utils.js
 
 // --- Spotify Extraction and Redirection Logic ---
-// ***** processArtistString function was removed from here *****
 function spotifyToYTM() {
     let itemName = null;    // Track OR album title
     let artistName = null;  // Artist name (always needed)

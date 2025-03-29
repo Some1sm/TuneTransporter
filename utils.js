@@ -118,7 +118,5 @@ function processArtistString(artistString) {
     // 4. Return processed string or null
     // Return the main artist(s) joined by a space, or null if none were found.
     // Often, just taking the *first* artist after splitting is desired for search.
-    // Let's return all primary artists joined by space for broader search matching.
-    // return cleanedArtists.length > 0 ? cleanedArtists[0] : null; // Option: Return only the very first artist
     return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null; // Option: Join primary artists
 }

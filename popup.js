@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } // End handleCopyLinkClick
 
-    // --- Handle Copy INFO Button Click (New Function) ---
+    // --- Handle Copy INFO Button Click ---
     async function handleCopyInfoClick(sourceType, tabId) {
         let injectionFunction;
 
@@ -286,6 +286,6 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error(`Error during ${sourceType} info copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
-    } // End handleCopyInfoClick
+    } 
 
-}); // End DOMContentLoaded
+}); 
