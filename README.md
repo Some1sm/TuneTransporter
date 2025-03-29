@@ -1,4 +1,4 @@
-# TuneTransporter - Chrome Extension
+# TuneTransporter 
 
 TuneTransporter is a browser extension that seamlessly bridges Spotify and YouTube Music. It automatically redirects music links between the two services and provides tools to easily copy converted links and raw track information.
 
