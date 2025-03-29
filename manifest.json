@@ -1,30 +1,42 @@
 {
   "manifest_version": 3,
   "name": "TuneTransporter",
-  "version": "1.3.1",
-  "description": "Automatically redirects music links between Spotify and YouTube Music.",
+  "version": "1.3.1", 
+  "description": "Automatically redirects music links between Spotify and YouTube Music, with copy tools.",
   "icons": {
     "16": "icons/icon16.jpeg",
     "32": "icons/icon32.jpeg",
     "48": "icons/icon48.jpeg",
     "128": "icons/icon128.jpeg"
   },
+
   "permissions": [
-    "storage",
-    "scripting",
-    "tabs"
+    "storage", // For saving settings
+    "scripting", // For executeScript in popup
+    "tabs" // For popup to read tab URL/ID
   ],
+
+  // Separate host permissions (like Chrome V3)
   "host_permissions": [
     "*://open.spotify.com/*",
     "*://music.youtube.com/*",
-    "*://www.youtube.com/*" 
+    "*://www.youtube.com/*"
   ],
+
+  // Use action key (like Chrome V3)
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_title": "TuneTransporter Settings" // Tooltip for the icon
+    // "default_icon": "icons/icon48.png" // Can specify default icon if needed
   },
+
   "background": {
-    "service_worker": "service-worker.js"
+    "scripts": [
+      "browser-polyfill.min.js",
+      "background.js"
+    ]
   },
+
   "content_scripts": [
     {
       "matches": [
@@ -32,7 +44,11 @@
         "https://open.spotify.com/album/*",
         "https://open.spotify.com/artist/*"
       ],
-      "js": [ "utils.js", "spotify2ytm-content.js" ],
+      "js": [
+        "browser-polyfill.min.js",
+        "utils.js",
+        "spotify2ytm-content.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -41,13 +57,26 @@
         "https://music.youtube.com/playlist?list=*",
         "https://music.youtube.com/channel/*"
       ],
-      "js": [ "utils.js", "ytm2spotify-content.js" ],
+      "js": [
+        "browser-polyfill.min.js",
+        "utils.js",
+        "ytm2spotify-content.js"
+      ],
       "run_at": "document_idle"
     },
-    { 
+    {
       "matches": [ "*://www.youtube.com/watch*" ],
-      "js": [ "yt-fallback-content.js" ],
+      "js": [
+        "browser-polyfill.min.js",
+        "yt-fallback-content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "some1sm@some1sm.com"
+    }
+  }
 }

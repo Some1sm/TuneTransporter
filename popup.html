@@ -3,7 +3,6 @@
 <head>
     <title>TuneTransporter</title>
     <link rel="stylesheet" href="popup.css">
-    <!-- <style> block removed -->
 </head>
 <body>
     <h1>TuneTransporter</h1>
@@ -16,14 +15,17 @@
         <input type="checkbox" id="ytmToggle"> Enable YTM -> Spotify
     </label>
 
-    <hr> <!-- Separator -->
+    <hr>
 
     <button id="copyYtmLinkBtn" disabled>Copy YouTube Music Link</button>
     <button id="copySpotifyLinkBtn" disabled>Copy Spotify Link</button>
     <button id="copyInfoBtn" disabled>Copy Track/Page Info</button>
 
-    <p id="statusMessage"></p> <!-- Area for status messages -->
+    <p id="statusMessage"></p>
 
+    <!-- Include the polyfill *BEFORE* popup.js -->
+    <script src="browser-polyfill.min.js"></script>
+    <!-- Now include your popup script -->
     <script src="popup.js"></script>
 </body>
 </html>
