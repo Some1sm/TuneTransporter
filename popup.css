@@ -40,18 +40,21 @@ button {
     margin-top: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
-    background-color: #f8f8f8;
+    background-color: #f0f0f0; /* Slightly darker default background for enabled */
     cursor: pointer;
     font-size: 0.9em; /* Match status message size */
+    color: #333; /* Ensure text is dark enough */
 }
 
     button:disabled {
         cursor: not-allowed;
         opacity: 0.5;
+        background-color: #f8f8f8; /* Keep disabled background light */
+        color: #999; /* Lighter text when disabled */
     }
 
     button:hover:not(:disabled) {
-        background-color: #eee;
+        background-color: #e0e0e0; /* Darker hover for enabled */
     }
 
 #statusMessage {
