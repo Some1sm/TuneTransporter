@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TuneTransporter",
-  "version": "1.4.2", 
+  "version": "1.4.2",
   "description": "Automatically redirects music links between Spotify and YouTube Music, with copy tools.",
   "icons": {
     "16": "icons/icon16.jpeg",
@@ -9,40 +9,33 @@
     "48": "icons/icon48.jpeg",
     "128": "icons/icon128.jpeg"
   },
-
   "permissions": [
-    "storage", // For saving settings
-    "scripting", // For executeScript in popup
-    "tabs" // For popup to read tab URL/ID
+    "storage",
+    "scripting",
+    "tabs"
   ],
-
-  // Separate host permissions (like Chrome V3)
   "host_permissions": [
     "*://open.spotify.com/*",
     "*://music.youtube.com/*",
     "*://www.youtube.com/*"
   ],
-
-  // Use action key (like Chrome V3)
   "action": {
     "default_popup": "popup.html",
-    "default_title": "TuneTransporter Settings" // Tooltip for the icon
-    // "default_icon": "icons/icon48.png" // Can specify default icon if needed
+    "default_title": "TuneTransporter Settings"
   },
-
   "background": {
     "scripts": [
       "browser-polyfill.min.js",
       "background.js"
     ]
   },
-
   "content_scripts": [
     {
       "matches": [
         "https://open.spotify.com/track/*",
         "https://open.spotify.com/album/*",
-        "https://open.spotify.com/artist/*"
+        "https://open.spotify.com/artist/*",
+        "https://open.spotify.com/search/*"
       ],
       "js": [
         "browser-polyfill.min.js",
@@ -65,6 +58,13 @@
       "run_at": "document_idle"
     },
     {
+      "matches": [
+        "https://music.youtube.com/search*"
+      ],
+      "js": [ "ytm-autoclick-content.js" ],
+      "run_at": "document_idle"
+    },
+    {
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [
         "browser-polyfill.min.js",
@@ -73,7 +73,6 @@
       "run_at": "document_idle"
     }
   ],
-
   "browser_specific_settings": {
     "gecko": {
       "id": "some1sm@some1sm.com"
