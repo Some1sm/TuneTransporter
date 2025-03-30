@@ -333,11 +333,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "getSpotifyAlbumTracks") { // Changed action name
         console.log("TuneTransporter: Received request to get album tracks."); // Updated log
         // *** MODIFIED CHECK: Now check for ALBUM page ***
-        if (!window.location.pathname.startsWith('/album/')) {
-            console.warn("TuneTransporter: Copy request received, but not on an album page.");
-            showFeedback("TuneTransporter: Not a Spotify album page.", 3000);
-            sendResponse({ success: false, error: "Not on an album page" });
-            return true;
+        const currentPath = window.location.pathname;
+        const allowedPaths = ['/album/', '/playlist/', '/collection/tracks'];
+        const isAllowedPage = allowedPaths.some(path => currentPath.startsWith(path));
+
+        if (!isAllowedPage) {
+            console.warn(`TuneTransporter: Get tracks request received, but not on an allowed page (album, playlist, collection). Path: ${currentPath}`);
+            showFeedback("TuneTransporter: Not a Spotify album, playlist, or collection page.", 3000);
+            sendResponse({ success: false, error: "Not on an allowed page (album, playlist, collection)" });
+            return true; // Stop processing
         }
 
         showFeedback("TuneTransporter: Extracting visible tracks...", 1500); // Show feedback briefly

@@ -164,10 +164,11 @@ document.addEventListener('DOMContentLoaded', function () {
                  canCopyYtm = true;
                  canCopyInfo = true;
                  currentSourceType = 'spotify';
-            } else if (currentUrl.includes("/playlist/")) {
-                 console.log("[Popup Debug] Spotify URL is playlist (Track copy disabled).");
-                 // Playlist copy button is now repurposed for albums
-                 currentSourceType = 'spotify'; // Still spotify source, but no buttons enabled here
+            } else if (currentUrl.includes("/playlist/") || currentUrl.includes("/collection/tracks")) { // Added playlist and collection check
+                 console.log("[Popup Debug] Spotify URL is playlist or collection.");
+                 canCopyAlbumTracks = true; // *** Enable track copy for playlists/collection ***
+                 canCopyInfo = true; // Can still copy basic info (though it might be less relevant for collection)
+                 currentSourceType = 'spotify';
             } else {
                 console.log("[Popup Debug] Spotify URL is other type.");
                 statusMsg = "Not a Spotify track/album/artist page."; // Updated message
