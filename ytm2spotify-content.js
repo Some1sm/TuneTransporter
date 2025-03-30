@@ -1,4 +1,4 @@
-﻿// TuneTransporter/ytm2spotify-content.js
+﻿﻿// TuneTransporter/ytm2spotify-content.js
 // NOTE: showFeedback and processArtistString functions are now loaded from utils.js
 console.log("TuneTransporter: YouTube Music to Spotify script loaded.");
 
