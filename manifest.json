@@ -17,7 +17,7 @@
   "host_permissions": [
     "*://open.spotify.com/*",
     "*://music.youtube.com/*",
-    "*://www.youtube.com/*" 
+    "*://www.youtube.com/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -45,7 +45,14 @@
       "js": [ "utils.js", "ytm2spotify-content.js" ],
       "run_at": "document_idle"
     },
-    { 
+    {
+      "matches": [
+        "https://music.youtube.com/search*"
+      ],
+      "js": [ "ytm-autoclick-content.js" ],
+      "run_at": "document_idle"
+    },
+    {
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [ "yt-fallback-content.js" ],
       "run_at": "document_idle"
