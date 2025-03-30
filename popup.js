@@ -16,14 +16,14 @@ function showStatus(message, duration = 2500) {
     }
 }
 
-// --- Injectable Extraction Functions (for Copy feature) ---
+// --- Injectable Extraction Functions (for Copy feature - NOT used by playlist/album copy) ---
 // Function to get data from Spotify page
 function getSpotifyData() {
     function _processArtistString(artistString) { // Internal helper
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-        if (primaryArtistPart.includes('�')) primaryArtistPart = primaryArtistPart.split('�')[0].trim();
+        if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim();
         const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
@@ -61,7 +61,7 @@ function getYtmData() {
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-        if (primaryArtistPart.includes('�')) primaryArtistPart = primaryArtistPart.split('�')[0].trim();
+        if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim();
         const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
@@ -104,6 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyYtmLinkBtn = document.getElementById('copyYtmLinkBtn');
     const copySpotifyLinkBtn = document.getElementById('copySpotifyLinkBtn');
     const copyInfoBtn = document.getElementById('copyInfoBtn');
+    const copySpotifyPlaylistBtn = document.getElementById('copySpotifyPlaylistBtn'); // Keep ID for now, represents "Copy Album Tracks"
 
     // Load toggle settings
     chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
@@ -124,53 +125,97 @@ document.addEventListener('DOMContentLoaded', function () {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (chrome.runtime.lastError || !tabs || tabs.length === 0 || !tabs[0] || !tabs[0].id || !tabs[0].url) {
             const errorMsg = chrome.runtime.lastError ? chrome.runtime.lastError.message : "Cannot access current tab info.";
-            console.warn("[DEBUG] Error or invalid tab:", errorMsg, tabs);
+            console.warn("[Popup Debug] Error or invalid tab:", errorMsg, tabs);
             showStatus(`Error: ${errorMsg}`, 0);
             copyYtmLinkBtn.disabled = true;
             copySpotifyLinkBtn.disabled = true;
             copyInfoBtn.disabled = true;
+            copySpotifyPlaylistBtn.disabled = true;
             return;
         }
 
         const currentUrl = tabs[0].url;
         const tabId = tabs[0].id;
-        console.log(`[DEBUG] Current Tab URL: ${currentUrl}, ID: ${tabId}`);
+        console.log(`[Popup Debug] Current Tab URL: ${currentUrl}, ID: ${tabId}`);
 
         let canCopyYtm = false;
         let canCopySpotify = false;
         let canCopyInfo = false;
+        let canCopyAlbumTracks = false; // Renamed flag for clarity
         let currentSourceType = null;
         let statusMsg = "";
 
+        console.log("[Popup Debug] Checking URL conditions...");
         if (currentUrl.startsWith("https://open.spotify.com/")) {
-            if (currentUrl.includes("/track/") || currentUrl.includes("/album/") || currentUrl.includes("/artist/")) {
-                canCopyYtm = true;
-                canCopyInfo = true;
-                currentSourceType = 'spotify';
-            } else { statusMsg = "Not a Spotify track/album/artist."; }
+            console.log("[Popup Debug] URL is Spotify.");
+            if (currentUrl.includes("/track/")) {
+                 console.log("[Popup Debug] Spotify URL is track.");
+                 canCopyYtm = true;
+                 canCopyInfo = true;
+                 currentSourceType = 'spotify';
+            } else if (currentUrl.includes("/album/")) { // *** CHANGED LOGIC ***
+                 console.log("[Popup Debug] Spotify URL is album.");
+                 canCopyYtm = true; // Can still copy YTM link from album
+                 canCopyInfo = true; // Can still copy basic album info
+                 canCopyAlbumTracks = true; // *** Enable album track copy ***
+                 currentSourceType = 'spotify';
+            } else if (currentUrl.includes("/artist/")) {
+                 console.log("[Popup Debug] Spotify URL is artist.");
+                 canCopyYtm = true;
+                 canCopyInfo = true;
+                 currentSourceType = 'spotify';
+            } else if (currentUrl.includes("/playlist/")) {
+                 console.log("[Popup Debug] Spotify URL is playlist (Track copy disabled).");
+                 // Playlist copy button is now repurposed for albums
+                 currentSourceType = 'spotify'; // Still spotify source, but no buttons enabled here
+            } else {
+                console.log("[Popup Debug] Spotify URL is other type.");
+                statusMsg = "Not a Spotify track/album/artist page."; // Updated message
+            }
         }
         else if (currentUrl.startsWith("https://music.youtube.com/")) {
+            console.log("[Popup Debug] URL is YTM.");
             if (currentUrl.includes("/watch?") || currentUrl.includes("/playlist?list=") || currentUrl.includes("/channel/")) {
+                console.log("[Popup Debug] YTM URL is song/playlist/artist.");
                 canCopySpotify = true;
                 canCopyInfo = true;
                 currentSourceType = 'ytm';
-            } else { statusMsg = "Not a YTM song/playlist/artist."; }
+            } else {
+                console.log("[Popup Debug] YTM URL is other type.");
+                statusMsg = "Not a YTM song/playlist/artist.";
+            }
         }
-        else if (currentUrl.startsWith("https://www.youtube.com/watch")) { statusMsg = "Copying not supported here."; }
-        else { statusMsg = "Not on Spotify or YTM."; }
+        else if (currentUrl.startsWith("https://www.youtube.com/watch")) {
+            console.log("[Popup Debug] URL is YouTube watch page.");
+            statusMsg = "Copying not supported here.";
+        }
+        else {
+            console.log("[Popup Debug] URL is not Spotify or YTM.");
+            statusMsg = "Not on Spotify or YTM.";
+        }
+        // Log flags using the new name
+        console.log(`[Popup Debug] Flags after check: canCopyYtm=${canCopyYtm}, canCopySpotify=${canCopySpotify}, canCopyInfo=${canCopyInfo}, canCopyAlbumTracks=${canCopyAlbumTracks}, currentSourceType=${currentSourceType}`);
 
         // --- Set disabled states ---
         copyYtmLinkBtn.disabled = !canCopyYtm;
         copySpotifyLinkBtn.disabled = !canCopySpotify;
         copyInfoBtn.disabled = !canCopyInfo;
+        copySpotifyPlaylistBtn.disabled = !canCopyAlbumTracks; // Use the new flag
+        // Log states using the new flag name
+        console.log(`[Popup Debug] Button states set: copyYtmLinkBtn.disabled=${copyYtmLinkBtn.disabled}, copySpotifyLinkBtn.disabled=${copySpotifyLinkBtn.disabled}, copyInfoBtn.disabled=${copyInfoBtn.disabled}, copySpotifyPlaylistBtn.disabled=${copySpotifyPlaylistBtn.disabled}`);
+
+        // *** FINAL CHECK LOGS ***
+        console.log(`[Popup Debug] FINAL CHECK: copyInfoBtn element disabled property is: ${copyInfoBtn.disabled}`);
+        console.log(`[Popup Debug] FINAL CHECK: copySpotifyPlaylistBtn element disabled property is: ${copySpotifyPlaylistBtn.disabled}`);
 
         // --- Set click handlers ---
         copyYtmLinkBtn.onclick = canCopyYtm ? () => handleCopyLinkClick('spotify', tabId) : null;
         copySpotifyLinkBtn.onclick = canCopySpotify ? () => handleCopyLinkClick('ytm', tabId) : null;
         copyInfoBtn.onclick = canCopyInfo ? () => handleCopyInfoClick(currentSourceType, tabId) : null;
+        copySpotifyPlaylistBtn.onclick = canCopyAlbumTracks ? () => handleCopySpotifyAlbumTracksClick(tabId) : null; // Use new flag and renamed handler
 
 
-        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && copyInfoBtn.disabled && statusMsg) {
+        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && copyInfoBtn.disabled && copySpotifyPlaylistBtn.disabled && statusMsg) {
             showStatus(statusMsg, 0);
         } else {
             showStatus("");
@@ -182,17 +227,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (results && results[0] && results[0].result) {
             const data = results[0].result;
             console.log(`Extracted data for ${actionType}:`, data);
-            // The check for data.artist is specific to the handlers, keep it there.
-            // if (!data.artist) {
-            //     throw new Error(`Could not find required info (artist) on the ${sourceType} page.`);
-            // }
             return data; // Return the extracted data if successful
         } else {
             let errorMsg = `Failed to get data from ${sourceType} page for ${actionType} copy.`;
             if (chrome.runtime.lastError) {
                 errorMsg += ` Error: ${chrome.runtime.lastError.message}`;
             } else if (results && results[0] && results[0].result === null) {
-                // Be more specific if the script ran but found nothing
                 errorMsg = `Could not find required info on the ${sourceType} page.`;
             }
             console.error(`Extraction failed for ${actionType}:`, results, chrome.runtime.lastError);
@@ -222,7 +262,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = _handleScriptResult(results, sourceType, 'link'); // Use helper
 
-            // Proceed if helper didn't throw
             let searchQuery;
             if (data.type === 'artist') searchQuery = data.artist;
                 else if (data.item && data.artist) searchQuery = `${data.item} ${data.artist}`;
@@ -230,26 +269,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 let targetSearchUrl;
                 if (targetServiceName === "YouTube Music") {
-                    // YTM URL - No change, use general search
                     targetSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
                 } else { // Spotify URL - Apply filter based on extracted type
                     let spotifyFilterType = null;
-                    // Map the TYPE extracted from YTM page to Spotify filter path
                     switch (data.type) {
-                        case 'track':       // From YTM /watch
-                            spotifyFilterType = 'tracks';
-                            break;
-                        case 'playlist':    // From YTM /playlist?list= (used for albums/playlists)
-                            spotifyFilterType = 'albums';
-                            break;
-                        case 'artist':      // From YTM /channel
-                            spotifyFilterType = 'artists';
-                            break;
-                        default:
-                            console.warn(`Unexpected data type "${data.type}" from YTM, using general Spotify search.`);
+                        case 'track': spotifyFilterType = 'tracks'; break;
+                        case 'playlist': spotifyFilterType = 'albums'; break; // YTM playlist maps to Spotify album search
+                        case 'artist': spotifyFilterType = 'artists'; break;
+                        default: console.warn(`Unexpected data type "${data.type}" from YTM, using general Spotify search.`);
                     }
 
-                    // Construct Spotify URL with filter if available
                     if (spotifyFilterType) {
                         targetSearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifyFilterType}`;
                         console.log(`Applying Spotify filter: /${spotifyFilterType}`);
@@ -262,9 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showStatus(`Copied ${targetServiceName} link!`);
                 console.log(`Copied ${targetServiceName} search URL: ${targetSearchUrl}`);
 
-            // The else block is now handled by the _handleScriptResult helper throwing an error
         } catch (error) {
-            // Catch errors from executeScript OR _handleScriptResult
             console.error(`Error during ${sourceType} link copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
@@ -287,22 +314,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = _handleScriptResult(results, sourceType, 'info'); // Use helper
 
-            // Proceed if helper didn't throw
-            // Specific check for info formatting still needed
             if (!data.artist) throw new Error(`Could not format info: Artist data missing from extraction.`);
 
-            // Format the string
             let infoString = `Artist: ${data.artist}`;
                 if (data.item && data.type !== 'artist') {
                     let itemLabel = data.type.charAt(0).toUpperCase() + data.type.slice(1);
-                    // Use specific labels based on source and type
-                    if (sourceType === 'ytm' && data.type === 'playlist') {
-                        itemLabel = 'Playlist/Album'; // Clarify YTM playlist type
-                    } else if (sourceType === 'spotify' && data.type === 'album') {
-                        itemLabel = 'Album';
-                    } else { // track
-                        itemLabel = 'Track';
-                    }
+                    if (sourceType === 'ytm' && data.type === 'playlist') { itemLabel = 'Playlist/Album'; }
+                    else if (sourceType === 'spotify' && data.type === 'album') { itemLabel = 'Album'; }
+                    else { itemLabel = 'Track'; }
                     infoString += `, ${itemLabel}: ${data.item}`;
                 } else if (!data.item && data.type !== 'artist') {
                     console.warn("Info formatting: Item missing for non-artist type.");
@@ -312,12 +331,52 @@ document.addEventListener('DOMContentLoaded', function () {
                 showStatus(`Copied page info!`);
                 console.log(`Copied info string: ${infoString}`);
 
-            // The else block is now handled by the _handleScriptResult helper throwing an error
         } catch (error) {
-            // Catch errors from executeScript, _handleScriptResult, OR the specific artist check
             console.error(`Error during ${sourceType} info copy process:`, error);
             showStatus(`Error: ${error.message}`, 4000);
         }
     } // End handleCopyInfoClick
+
+    // --- Handle Copy SPOTIFY ALBUM TRACKS Button Click ---
+    // Renamed function for clarity and modified to handle copy within popup
+    async function handleCopySpotifyAlbumTracksClick(tabId) { // Renamed function
+        showStatus("Getting album tracks...", 0); // Updated status message
+        try {
+            // Send message to the content script to GET the tracks
+            const response = await chrome.tabs.sendMessage(tabId, { action: "getSpotifyAlbumTracks" }); // Changed action
+
+            // Handle the response from the content script
+            if (chrome.runtime.lastError) {
+                throw new Error(chrome.runtime.lastError.message || "Failed to send message to content script.");
+            }
+
+            if (response && response.success && response.tracks) {
+                if (response.count > 0) {
+                    // Perform the copy operation HERE in the popup
+                    await navigator.clipboard.writeText(response.tracks);
+                    showStatus(`Copied ${response.count} visible tracks!`);
+                    console.log(`Successfully received ${response.count} tracks from content script and copied to clipboard.`);
+                    console.log("Copied content:\n", response.tracks); // Log copied content for debugging
+                } else {
+                    showStatus("No visible tracks found on the page.");
+                    console.log("Content script reported success but 0 tracks found.");
+                }
+            } else if (response && response.success && response.count === 0) {
+                 showStatus("No visible tracks found on the page.");
+                 console.log("Content script reported success but 0 tracks found.");
+            }
+             else {
+                throw new Error(response?.error || "Content script failed to get album tracks.");
+            }
+
+        } catch (error) {
+            console.error("Error during Spotify album tracks copy request:", error);
+            if (error.message.includes("Could not establish connection") || error.message.includes("Receiving end does not exist")) {
+                 showStatus("Error: Cannot connect to Spotify page. Try reloading the page.", 4000);
+            } else {
+                 showStatus(`Error: ${error.message}`, 4000);
+            }
+        }
+    } // End handleCopySpotifyAlbumTracksClick
 
 }); // End DOMContentLoaded
