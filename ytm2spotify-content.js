@@ -17,11 +17,17 @@ const YTM_WATCH_ARTIST_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .byline`;
 // --- Core Logic Functions ---
 
 function tryExtractAndRedirect() {
-    // Check for internal redirect flag first
+    // NOTE: The check for arrival from Spotify is now handled asynchronously
+    // at the main execution entry point using chrome.storage.local.get
+    // before this function is potentially called.
+
+    // Check for internal YTM redirect flag (e.g., from search to watch page within YTM)
     if (sessionStorage.getItem('tuneTransporterYTMRedirected') === 'true') {
         sessionStorage.removeItem('tuneTransporterYTMRedirected');
-        console.log("TuneTransporter: Detected internal redirect from YTM. Stopping script execution.");
-        return;
+        console.log("TuneTransporter: Detected internal redirect within YTM. Stopping script execution for this specific check.");
+        // Note: We might still want the observer to run on watch pages even after internal YTM redirect,
+        // so we don't return completely here, just from this initial tryExtractAndRedirect call.
+        // The main execution logic below will handle starting the observer if needed.
     }
 
     const currentUrl = window.location.href;
@@ -203,23 +209,43 @@ function initializeWatchPageObserver() {
 
 
 // --- Main execution ---
-chrome.storage.local.get(['ytmEnabled'], function (result) {
-    // Global sessionStorage check for all page types
-    if (sessionStorage.getItem('tuneTransporterYTMRedirected') === 'true') {
-        sessionStorage.removeItem('tuneTransporterYTMRedirected');
-        console.log("TuneTransporter: Detected internal redirect from YTM. Stopping script execution.");
+// First, check if we arrived from Spotify via the persistent flag
+chrome.storage.local.get(['tuneTransporterFromSpotify'], function (flagResult) {
+    if (flagResult.tuneTransporterFromSpotify === true) {
+        console.log("TuneTransporter: Detected 'tuneTransporterFromSpotify' flag in storage. Stopping YTM->Spotify script.");
+        // Remove the flag so it doesn't interfere with subsequent navigations
+        chrome.storage.local.remove('tuneTransporterFromSpotify', () => {
+            console.log("TuneTransporter: Removed 'tuneTransporterFromSpotify' flag.");
+        });
+        // IMPORTANT: Stop execution here, do not proceed to the ytmEnabled check
         return;
     }
 
-    if (result.ytmEnabled !== false) {
-        setTimeout(() => {
-            if (window.location.href.startsWith("https://music.youtube.com/watch")) {
-                initializeWatchPageObserver();
-            } else {
-                tryExtractAndRedirect();
-            }
-        }, 200);
-    } else {
-        console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
-    }
+    // If the flag wasn't set, proceed with the normal logic
+    console.log("TuneTransporter: No 'tuneTransporterFromSpotify' flag found. Proceeding with normal execution.");
+    chrome.storage.local.get(['ytmEnabled'], function (settingsResult) {
+        // Global sessionStorage check: Was there an internal YTM redirect?
+        // This check remains relevant for internal YTM navigations unrelated to Spotify->YTM flow.
+        if (sessionStorage.getItem('tuneTransporterYTMRedirected') === 'true') {
+            sessionStorage.removeItem('tuneTransporterYTMRedirected');
+            console.log("TuneTransporter: Detected internal redirect within YTM at script start. Allowing script to continue (e.g., for observer).");
+            // Don't return here, allow the rest of the logic (like observer init) to proceed if enabled.
+        }
+
+        // Check if the YTM->Spotify feature is enabled in settings
+        if (settingsResult.ytmEnabled !== false) {
+            // Use a small delay to allow the page to potentially load more elements
+            setTimeout(() => {
+                if (window.location.href.startsWith("https://music.youtube.com/watch")) {
+                    // On watch pages, initialize the observer (which handles its own extraction/redirect)
+                    initializeWatchPageObserver();
+                } else {
+                    // On other pages (like playlist, album, artist), attempt direct extraction/redirect
+                    tryExtractAndRedirect();
+                }
+            }, 200);
+        } else {
+            console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
+        }
+    });
 });

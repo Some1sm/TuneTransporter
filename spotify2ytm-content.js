@@ -308,7 +308,11 @@ function spotifyToYTM(settings) { // Pass settings in
 
             const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
             console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
-            window.location.href = youtubeMusicSearchUrl;
+            // Set flag in persistent storage before navigating
+            chrome.storage.local.set({ 'tuneTransporterFromSpotify': true }, () => {
+                console.log("TuneTransporter: Flag 'tuneTransporterFromSpotify' set in chrome.storage.local.");
+                window.location.href = youtubeMusicSearchUrl; // Navigate after setting the flag
+            });
 
         } else if (settings.spotifyEnabled === false && artistName) {
              console.log("TuneTransporter: Spotify -> YTM redirection is disabled. Skipping YTM redirect.");
