@@ -17,12 +17,19 @@ const YTM_WATCH_ARTIST_SELECTOR = `${YTM_WATCH_QUEUE_ITEM_SELECTOR} .byline`;
 // --- Core Logic Functions ---
 
 function tryExtractAndRedirect() {
+    // Check for internal redirect flag first
+    if (sessionStorage.getItem('tuneTransporterYTMRedirected') === 'true') {
+        sessionStorage.removeItem('tuneTransporterYTMRedirected');
+        console.log("TuneTransporter: Detected internal redirect from YTM. Stopping script execution.");
+        return;
+    }
+
     const currentUrl = window.location.href;
     let itemName = null;
     let artistName = null;
     let extracted = false;
     let isArtistSearch = false;
-    let spotifySearchType = null; // <<< NEW: To store 'tracks', 'albums', or 'artists'
+    let spotifySearchType = null;
 
     if (currentUrl.startsWith("https://music.youtube.com/watch")) {
         console.log("TuneTransporter: Skipping direct extraction on watch page (observer handles this).");
@@ -38,11 +45,11 @@ function tryExtractAndRedirect() {
 
             if (titleElement && titleElement.title && artistElement && artistElement.title) {
                 itemName = titleElement.title.trim();
-                artistName = processArtistString(artistElement.title); // Pass the raw title
+                artistName = processArtistString(artistElement.title);
 
-                if (itemName && artistName) { // Check if both are valid after processing
+                if (itemName && artistName) {
                     extracted = true;
-                    spotifySearchType = 'albums'; // <<< SET TYPE: Use 'albums' for playlists/albums
+                    spotifySearchType = 'albums';
                     console.log(`TuneTransporter: Extracted Playlist/Album - Item: "${itemName}", Artist: "${artistName}"`);
                 } else {
                     console.warn("TuneTransporter: Playlist/Album elements found, but text was empty after processing.");
@@ -62,10 +69,10 @@ function tryExtractAndRedirect() {
                 artistName = processArtistString(rawArtistName);
                 itemName = null;
 
-                if (artistName) { // Check if valid after processing
+                if (artistName) {
                     extracted = true;
                     isArtistSearch = true;
-                    spotifySearchType = 'artists'; // <<< SET TYPE
+                    spotifySearchType = 'artists';
                     console.log(`TuneTransporter: Extracted Artist - Artist: "${artistName}"`);
                 } else {
                     console.warn("TuneTransporter: Artist element found, but text was empty after processing.");
@@ -83,38 +90,35 @@ function tryExtractAndRedirect() {
         }
 
         // --- Common Redirection Logic ---
-        if (extracted && artistName) { // Check processed artistName
+        if (extracted && artistName) {
             let searchQuery;
             if (isArtistSearch) {
                 searchQuery = artistName;
             } else if (itemName) {
                 searchQuery = itemName + " " + artistName;
             } else {
-                // Should only happen if itemName extraction failed for playlist/album but artist was found (unlikely with current checks)
                 console.error("TuneTransporter: Artist found but item missing for non-artist search.");
                 showFeedback("TuneTransporter: Error preparing search query.");
                 return;
             }
 
             let spotifySearchUrl;
-            // <<< MODIFIED: Construct URL with type filter if available
             if (spotifySearchType) {
                 spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifySearchType}`;
                 console.log(`TuneTransporter: Preparing Spotify search with filter '${spotifySearchType}': "${searchQuery}"`);
             } else {
-                // Fallback to general search if type wasn't determined (shouldn't happen with current logic)
                 spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}`;
-                console.warn(`TuneTransporter: Spotify search type filter not determined. Using general search for: "${searchQuery}"`);
+                console.warn(`TuneTransporter: Using general search for: "${searchQuery}"`);
             }
 
             console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
+            sessionStorage.setItem('tuneTransporterYTMRedirected', 'true');
             window.location.href = spotifySearchUrl;
 
         } else if (extracted && !artistName) {
-            console.warn("TuneTransporter: Extraction seemed successful but artist name is missing after processing.");
+            console.warn("TuneTransporter: Extraction seemed successful but artist name is missing.");
             showFeedback("TuneTransporter: Could not extract required artist information.");
         }
-        // If not extracted, feedback was likely shown already in the specific block
 
     } catch (error) {
         console.error("TuneTransporter: Error during YTM to Spotify redirection:", error);
@@ -168,39 +172,31 @@ function initializeWatchPageObserver() {
                 const trackName = rawTitle;
                 const artistName = processArtistString(rawArtist);
 
-                if (trackName && artistName) { // Check if valid after processing
-                    // --- SUCCESS CASE (Primary redirect) ---
+                if (trackName && artistName) {
                     console.log(`TuneTransporter: Extracted from Watch Observer - Track: "${trackName}", Artist: "${artistName}"`);
                     redirectionAttempted = true;
                     cleanup("Primary redirection successful");
 
                     const searchQuery = trackName + " " + artistName;
-                    const spotifySearchType = 'tracks'; // <<< SET TYPE for watch pages
-
-                    // <<< MODIFIED: Construct URL with type filter
-                    const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/${spotifySearchType}`;
-                    console.log(`TuneTransporter: Preparing Spotify search with filter '${spotifySearchType}': "${searchQuery}"`);
-
+                    const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/tracks`;
+                    console.log(`TuneTransporter: Preparing Spotify track search: "${searchQuery}"`);
 
                     console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
-                    window.location.href = spotifySearchUrl; // Perform the redirect
-                    // ---------------------------------------
+                    sessionStorage.setItem('tuneTransporterYTMRedirected', 'true');
+                    window.location.href = spotifySearchUrl;
                 } else {
-                    // Processing resulted in empty fields
                     console.warn("TuneTransporter: Watch observer - Names were empty after processing.");
                     triggerFallbackRedirect("Empty fields after processing");
                 }
             }
-            // else: Attributes/text not populated yet, observer will run again.
         }
-        // else: Target elements not found yet, observer will run again.
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['title', 'class'] // Watch title changes, also class changes (like 'selected')
+        attributeFilter: ['title', 'class']
     });
     console.log("TuneTransporter: YTM Watch observer started.");
 }
@@ -208,16 +204,21 @@ function initializeWatchPageObserver() {
 
 // --- Main execution ---
 chrome.storage.local.get(['ytmEnabled'], function (result) {
-    if (result.ytmEnabled !== false) { // If primary YTM->Spotify is enabled...
-        // Use a timeout to allow the page (especially watch pages) to potentially load dynamic content
+    // Global sessionStorage check for all page types
+    if (sessionStorage.getItem('tuneTransporterYTMRedirected') === 'true') {
+        sessionStorage.removeItem('tuneTransporterYTMRedirected');
+        console.log("TuneTransporter: Detected internal redirect from YTM. Stopping script execution.");
+        return;
+    }
+
+    if (result.ytmEnabled !== false) {
         setTimeout(() => {
-            // Decide whether to run observer or direct extraction based on page type
             if (window.location.href.startsWith("https://music.youtube.com/watch")) {
                 initializeWatchPageObserver();
             } else {
-                tryExtractAndRedirect(); // Handles playlist/album/artist pages
+                tryExtractAndRedirect();
             }
-        }, 200); // Small delay
+        }, 200);
     } else {
         console.log("TuneTransporter: YTM -> Spotify redirection is disabled in settings.");
     }
