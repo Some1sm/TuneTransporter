@@ -12,7 +12,8 @@
   "permissions": [
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "*://open.spotify.com/*",
