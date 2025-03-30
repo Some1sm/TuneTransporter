@@ -1,46 +1,29 @@
 # Changelog
 
-## [1.3.1] - 2025-29-03
+## [1.4.3] - 2025-03-30 
 
 ### Added
 
-*   **Copy Converted Link Feature:**
-    *   Added "Copy YouTube Music Link" and "Copy Spotify Link" buttons to the extension popup (`popup.html`).
-    *   Buttons are enabled only when viewing a supported page on the corresponding service (Spotify or YTM).
-    *   Clicking an enabled button extracts track/album/artist information from the current page using injected scripts (`chrome.scripting.executeScript`).
-    *   Constructs a search URL for the *target* music service (e.g., clicking "Copy YTM Link" on Spotify generates a YTM search URL).
-    *   Copies the generated search URL to the user's clipboard (`navigator.clipboard.writeText`).
-    *   Added a status message area (`<p id="statusMessage">`) in the popup to provide feedback ("Copying...", "Copied!", "Error...", "Not on a supported page", etc.) (`popup.js`, `popup.css`).
-*   **Copy Raw Info Feature:**
-    *   Added a "Copy Track/Page Info" button (`#copyInfoBtn`) to the extension popup (`popup.html`).
-    *   Button is enabled only when viewing a supported page on Spotify or YTM.
-    *   Clicking the button extracts track/album/artist information using the same injected scripts as the "Copy Link" feature.
-    *   Formats the extracted data into a plain text string (e.g., "Artist: Queen, Track: Bohemian Rhapsody" or "Artist: The Beatles").
-    *   Copies the formatted text string to the user's clipboard (`navigator.clipboard.writeText`).
-    *   Provides feedback in the popup status message area (`popup.js`).
-*   **Injectable Extraction Functions:** Defined self-contained `getSpotifyData` and `getYtmData` functions (including internal artist processing logic) within `popup.js` for use with `executeScript`.
+*   **Automatic First Result Selection on Search Pages:**
+    *   **Spotify:** When redirected to a Spotify search page (`/search/...`), the extension now attempts to automatically navigate to the first relevant result.
+        *   Detects if the search page is specifically showing tracks, albums, or artists based on the URL (`/search/.../tracks`, `/search/.../albums`, `/search/.../artists`).
+        *   Uses polling (`setInterval`) to wait for the results to load.
+        *   Selects the appropriate first result link (`div[data-testid="track-list"]... a[href^="/track/"]` for tracks, `div[data-testid="search-category-card-0"]... a[href^="/album/"]` for albums, `div[data-testid="search-category-card-0"]... a[href^="/artist/"]` for artists).
+        *   Navigates directly to the first result's page (`spotify2ytm-content.js`).
+        *   Includes a timeout and provides feedback (`showFeedback`) if the first result cannot be found or clicked.
+        *   Uses `sessionStorage` (`tuneTransporterRedirected`) to prevent re-running the main script logic after this internal navigation occurs.
+    *   **YouTube Music:** When redirected to a YTM search page (`music.youtube.com/search*`), a new content script (`ytm-autoclick-content.js`) attempts to automatically navigate to the most likely intended result.
+        *   Uses a `MutationObserver` to efficiently detect when search results appear.
+        *   Prioritizes clicking the link for the "Top result" track card (`ytmusic-card-shelf-renderer ... a[href^="watch?v="]`).
+        *   If no top track link is found, it looks for and clicks the chevron button (`yt-button-shape[icon-name="yt-sys-icons:chevron_right"] ...`) often associated with the top album/playlist result.
+        *   Includes a timeout for the observer.
 
 ### Changed
 
 *   **Manifest (`manifest.json`):**
-    *   Added the `"scripting"` permission required for `chrome.scripting.executeScript`.
-    *   Added the `"tabs"` permission required by `popup.js` to access the active tab's URL via `chrome.tabs.query`.
-    *   Consolidated necessary `host_permissions` (`*://open.spotify.com/*`, `*://music.youtube.com/*`, `*://www.youtube.com/*`) to ensure both content script injection and `executeScript` function correctly.
-*   **Popup Logic (`popup.js`):**
-    *   Refactored to query the active tab on load to determine URL and enable/disable all copy buttons (`#copyYtmLinkBtn`, `#copySpotifyLinkBtn`, `#copyInfoBtn`) appropriately.
-    *   Implemented robust checks for tab query results and potential errors.
-    *   Renamed `handleCopyClick` to `handleCopyLinkClick` for clarity.
-    *   Added new `handleCopyInfoClick` async function to manage the script injection, data processing, text formatting, and clipboard writing process for the raw info feature.
-    *   Updated button enabling logic to handle the state of the new `#copyInfoBtn`.
-    *   Duplicated artist processing logic inside injectable functions (`getSpotifyData`, `getYtmData`) as they run in an isolated context.
-*   **Artist Processing (`utils.js`, `spotify2ytm-content.js`, `ytm2spotify-content.js`):**
-    *   Centralized artist string cleanup logic into a `processArtistString` function in `utils.js`.
-    *   Updated content scripts (`spotify2ytm-content.js`, `ytm2spotify-content.js`) to use the shared `processArtistString` function for consistent artist name handling during automatic redirection.
-*   **File Encoding:** Ensured `utils.js` and `popup.js` are saved with UTF-8 encoding to handle special characters correctly and prevent Chrome loading errors.
-
-### Fixed
-
-*   **Popup Button State:** Fixed issue where copy buttons were incorrectly disabled due to the popup script's inability to read the active tab's URL (resolved by adding `"tabs"` permission).
-*   **Script Execution Error:** Fixed "Cannot access contents of url..." error when trying to copy by ensuring correct host permissions were declared alongside the `"scripting"` permission in the manifest.
-*   **Popup Styling:** Fixed oversized Spotify icon by ensuring the `popup-icon` class was correctly applied in `popup.html`. Moved button/status styles from inline HTML to `popup.css`.
-*   **Content Script Loading:** Fixed "Could not load file ... It isn't UTF-8 encoded" errors by resaving affected files (`utils.js`, `popup.js`) with UTF-8 encoding.
+    *   Added a new content script entry for `ytm-autoclick-content.js` targeting `https://music.youtube.com/search*` pages.
+    *   Updated `spotify2ytm-content.js` `matches` to exclude `/search/*` as the primary extraction/redirection logic shouldn't run there (auto-selection handles it). *(Self-correction: Reviewing your provided code, it seems `spotify2ytm-content.js` *does* still match `/search/*` to handle the auto-selection logic within that script. Correcting this point.)*
+    *   Adjusted `spotify2ytm-content.js` logic to detect `/search/` pages and trigger the auto-selection behavior instead of attempting regular track/album/artist extraction.
+*   **Spotify Content Script (`spotify2ytm-content.js`):**
+    *   Refactored to include specific logic for handling `/search/` pages, distinguishing between track, album, and artist result views.
+    *   Implemented the polling mechanism for finding and navigating to the first result link.
