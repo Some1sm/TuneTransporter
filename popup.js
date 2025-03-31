@@ -351,23 +351,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error(chrome.runtime.lastError.message || "Failed to send message to content script.");
             }
 
-            if (response && response.success && response.tracks) {
-                if (response.count > 0) {
+            // Check for success and that we have either tracks OR a title
+            if (response && response.success && (response.tracks || response.pageTitle)) {
+                const pageTitle = response.pageTitle || "Unknown Title"; // Use fallback if title missing
+                const trackCount = response.count || 0;
+                const trackList = response.tracks || ""; // Use empty string if tracks missing
+
+                if (trackCount > 0) {
+                    // Construct the final string with title and tracks
+                    const clipboardText = `${pageTitle}\n\n${trackList}`;
                     // Perform the copy operation HERE in the popup
-                    await navigator.clipboard.writeText(response.tracks);
-                    showStatus(`Copied ${response.count} visible tracks!`);
-                    console.log(`Successfully received ${response.count} tracks from content script and copied to clipboard.`);
-                    console.log("Copied content:\n", response.tracks); // Log copied content for debugging
+                    await navigator.clipboard.writeText(clipboardText);
+                    showStatus(`Copied "${pageTitle}" (${trackCount} tracks)!`); // Updated status
+                    console.log(`Successfully received ${trackCount} tracks and title "${pageTitle}" from content script and copied to clipboard.`);
+                    console.log("Copied content:\n", clipboardText); // Log copied content for debugging
                 } else {
-                    showStatus("No visible tracks found on the page.");
-                    console.log("Content script reported success but 0 tracks found.");
+                    // Still copy title if no tracks found
+                    await navigator.clipboard.writeText(pageTitle);
+                    showStatus(`Copied title "${pageTitle}" (0 tracks found).`);
+                    console.log(`Content script reported success but 0 tracks found. Copied title: "${pageTitle}"`);
                 }
-            } else if (response && response.success && response.count === 0) {
-                 showStatus("No visible tracks found on the page.");
-                 console.log("Content script reported success but 0 tracks found.");
-            }
-             else {
-                throw new Error(response?.error || "Content script failed to get album tracks.");
+            } else {
+                // Handle failure case
+                throw new Error(response?.error || "Content script failed to get tracks or title.");
             }
 
         } catch (error) {

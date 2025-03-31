@@ -374,6 +374,47 @@ function extractTrackInfoFromRow(rowElement) {
 }
 
 
+// --- Function to Extract Page Title ---
+function extractPageTitle() {
+    const title = document.title;
+    let pageTitle = null;
+
+    // Try Album pattern first (more specific)
+    let match = title.match(/^(.+?)\s+-\s+Album by .+? \| Spotify$/i);
+    if (match && match[1]) {
+        pageTitle = match[1].trim();
+        console.log(`TuneTransporter: Extracted Album Title: "${pageTitle}"`);
+        return pageTitle;
+    }
+
+    // Try Playlist pattern
+    match = title.match(/^(.+?)\s+-\s+playlist by .+? \| Spotify$/i);
+    if (match && match[1]) {
+        pageTitle = match[1].trim();
+        console.log(`TuneTransporter: Extracted Playlist Title: "${pageTitle}"`);
+        return pageTitle;
+    }
+
+    // Try Collection pattern ("Liked Songs", etc.)
+    match = title.match(/^Spotify – (.+)$/i);
+    if (match && match[1]) {
+        pageTitle = match[1].trim();
+        console.log(`TuneTransporter: Extracted Collection Title: "${pageTitle}"`);
+        return pageTitle;
+    }
+
+    // Fallback: Try to remove common suffixes if specific patterns fail
+    if (!pageTitle) {
+        pageTitle = title.replace(/\s*\| Spotify\s*$/i, '').replace(/\s*-\s*Spotify\s*$/i, '').trim();
+        // Further cleanup for potential " - song by..." etc. if it wasn't caught earlier
+        pageTitle = pageTitle.replace(/\s+-\s+(song|playlist|album) by .+$/i, '').trim();
+        console.warn(`TuneTransporter: Could not match specific title pattern. Using fallback title: "${pageTitle}" (Original: "${title}")`);
+    }
+
+    return pageTitle || "Unknown Title"; // Return "Unknown Title" if everything fails
+}
+
+
 // --- Main Virtual Scrolling and Extraction Function ---
 async function scrollAndExtractAllTracks(sendResponse) {
     // Try the suggested specific selector first
@@ -413,6 +454,9 @@ async function scrollAndExtractAllTracks(sendResponse) {
 
     console.log("TuneTransporter: Starting playlist scroll extraction...");
     showFeedback("TuneTransporter: Starting scroll extraction...", 2000);
+
+    // Extract page title before starting scroll
+    const pageTitle = extractPageTitle();
 
     try {
         while (stableScrollCount < maxStableScrolls && iterations < maxIterations) {
@@ -477,19 +521,22 @@ async function scrollAndExtractAllTracks(sendResponse) {
 
         if (finalTracks.length > 0) {
             const formattedList = finalTracks.map(t => `${t.title} - ${t.artist}`).join('\n');
-            console.log(`TuneTransporter: Sending ${finalTracks.length} tracks back to popup after scrolling.`);
+            console.log(`TuneTransporter: Sending ${finalTracks.length} tracks and title "${pageTitle}" back to popup after scrolling.`);
             showFeedback(`TuneTransporter: Found ${finalTracks.length} total tracks.`, 2000);
-            sendResponse({ success: true, count: finalTracks.length, tracks: formattedList });
+            // Include pageTitle in the response
+            sendResponse({ success: true, count: finalTracks.length, tracks: formattedList, pageTitle: pageTitle });
         } else {
             console.log("TuneTransporter: No tracks found or extracted after scrolling.");
             showFeedback("TuneTransporter: No tracks found after scrolling.", 3000);
-            sendResponse({ success: true, count: 0, tracks: null });
+            // Include pageTitle even if no tracks found
+            sendResponse({ success: true, count: 0, tracks: null, pageTitle: pageTitle });
         }
 
     } catch (error) {
         console.error("TuneTransporter: Error during scroll/extraction process:", error);
         showFeedback(`TuneTransporter: Error during scroll/extraction: ${error.message}`, 4000);
-        sendResponse({ success: false, error: `Scroll/Extraction Error: ${error.message}` });
+        // Include pageTitle in error response if possible
+        sendResponse({ success: false, error: `Scroll/Extraction Error: ${error.message}`, pageTitle: pageTitle });
     }
 }
 
