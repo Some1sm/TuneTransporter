@@ -328,11 +328,177 @@ function spotifyToYTM(settings) { // Pass settings in
 }
 
 // --- Message Listener for Popup Actions ---
+// --- Helper Functions for Virtual Scrolling ---
+
+// Helper function to pause execution
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Function to extract info from a single row, using href as ID
+// Assumes processArtistString is available in the global scope (from utils.js)
+function extractTrackInfoFromRow(rowElement) {
+   const titleSelector = 'div[role="gridcell"][aria-colindex="2"] a[data-testid="internal-track-link"] > div[data-encore-id="text"]'; // Use the existing title selector
+   const artistSelector = 'div[role="gridcell"][aria-colindex="2"] span a[href^="/artist/"]';
+   const linkSelector = 'div[role="gridcell"][aria-colindex="2"] a[data-testid="internal-track-link"]'; // For unique ID (href)
+
+   const titleElement = rowElement.querySelector(titleSelector);
+   const artistElements = rowElement.querySelectorAll(artistSelector);
+   const linkElement = rowElement.querySelector(linkSelector);
+
+   const title = titleElement ? titleElement.textContent?.trim() : null;
+   const trackHref = linkElement ? linkElement.getAttribute('href') : null; // Use href as a potential unique ID
+
+   let artistNames = [];
+   if (artistElements.length > 0) {
+       artistNames = Array.from(artistElements).map(el => el.textContent?.trim()).filter(Boolean);
+   }
+   const combinedArtistString = artistNames.join(" ");
+
+   // Check if processArtistString is available before calling
+   let processedArtist = null;
+   if (typeof processArtistString === 'function') {
+       processedArtist = processArtistString(combinedArtistString);
+   } else {
+       console.warn("TuneTransporter: processArtistString function not found. Using raw artist string.");
+       processedArtist = combinedArtistString; // Fallback
+   }
+
+
+   if (title && processedArtist && trackHref) {
+       return { id: trackHref, title: title, artist: processedArtist };
+   } else {
+       // console.warn(`TuneTransporter: Failed partial extract - Title: ${!!title}, Artist: ${!!processedArtist}, Href: ${!!trackHref}`, rowElement);
+   }
+   return null; // Failed to get required info
+}
+
+
+// --- Main Virtual Scrolling and Extraction Function ---
+async function scrollAndExtractAllTracks(sendResponse) {
+    // Try the suggested specific selector first
+    const scrollContainerSelector = '.main-view-container__scroll-node div[data-overlayscrollbars-viewport]';
+    const trackRowSelector = 'div[data-testid="tracklist-row"]'; // Existing track row selector
+
+    let scrollContainer = null;
+    const maxFindAttempts = 20; // Try finding the element for ~5 seconds
+    let findAttempts = 0;
+
+    // Retry finding the scroll container
+    showFeedback("TuneTransporter: Locating scroll area...", 1000);
+    while (!scrollContainer && findAttempts < maxFindAttempts) {
+        scrollContainer = document.querySelector(scrollContainerSelector);
+        if (!scrollContainer) {
+            findAttempts++;
+            console.log(`TuneTransporter: Scroll container ('${scrollContainerSelector}') not found (Attempt ${findAttempts}/${maxFindAttempts}). Waiting 250ms...`);
+            await delay(250); // Use helper
+        }
+    }
+
+    // If still not found after retries, give up
+    if (!scrollContainer) {
+        console.error(`TuneTransporter: Could not find the scroll viewport ('${scrollContainerSelector}') after ${maxFindAttempts} attempts. Scrolling cannot proceed.`);
+        showFeedback("TuneTransporter: Could not find the scrollable content area.", 3000);
+        sendResponse({ success: false, error: `Could not find the scrollable content area ('${scrollContainerSelector}') after retries` });
+        return;
+    }
+
+    const extractedTracks = new Map(); // Use Map to store unique tracks by ID (href)
+    let lastTrackCount = 0;
+    let stableScrollCount = 0; // Count how many times we scrolled without finding new tracks
+    const maxStableScrolls = 3; // Stop after 3 consecutive scrolls yield no new tracks
+    const scrollDelayMs = 750; // Wait time after scrolling (adjust if needed)
+    const maxIterations = 150; // Safety break for very long lists (adjust if needed)
+    let iterations = 0;
+
+    console.log("TuneTransporter: Starting playlist scroll extraction...");
+    showFeedback("TuneTransporter: Starting scroll extraction...", 2000);
+
+    try {
+        while (stableScrollCount < maxStableScrolls && iterations < maxIterations) {
+            iterations++;
+
+            // Extract currently visible tracks
+            const currentRows = document.querySelectorAll(trackRowSelector);
+            let newTracksFoundThisIteration = 0;
+            currentRows.forEach(row => {
+                const trackInfo = extractTrackInfoFromRow(row);
+                // Add to map only if valid and not already present
+                if (trackInfo && trackInfo.id && !extractedTracks.has(trackInfo.id)) {
+                    extractedTracks.set(trackInfo.id, { title: trackInfo.title, artist: trackInfo.artist });
+                    newTracksFoundThisIteration++;
+                }
+            });
+
+            const currentTrackCount = extractedTracks.size;
+            console.log(`TuneTransporter: Iteration ${iterations}. Found: ${newTracksFoundThisIteration} new. Total Unique: ${currentTrackCount}`);
+            showFeedback(`TuneTransporter: Scanned ${currentTrackCount} tracks...`, 1000);
+
+
+            // Check if we found new tracks since last scroll
+            if (currentTrackCount === lastTrackCount && iterations > 1) {
+                stableScrollCount++;
+                console.log(`TuneTransporter: Stable scroll count: ${stableScrollCount}/${maxStableScrolls}`);
+            } else {
+                stableScrollCount = 0; // Reset if new tracks were found
+            }
+
+            if (stableScrollCount >= maxStableScrolls) {
+                console.log("TuneTransporter: No new tracks found after multiple scrolls. Assuming end of list.");
+                showFeedback("TuneTransporter: Finished scanning.", 1500);
+                break; // Exit loop
+            }
+
+            lastTrackCount = currentTrackCount;
+
+            // Scroll down incrementally
+            const scrollAmount = scrollContainer.clientHeight * 0.85; // Scroll ~85% of the visible height
+            // console.log(`Scrolling down by ${scrollAmount.toFixed(0)}px...`); // Less verbose logging
+            scrollContainer.scrollTop += scrollAmount;
+
+            // Wait for content to load
+            await delay(scrollDelayMs);
+
+            // Optional check: If scroll position didn't change much, maybe we are truly at bottom
+            if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 20) { // Add small buffer
+                console.log("TuneTransporter: Scroll position appears to be at the bottom.");
+                // Don't increment stableScrollCount here, let the track check handle stability
+            }
+
+        } // End while loop
+
+        if (iterations >= maxIterations) {
+            console.warn("TuneTransporter: Reached max scroll iterations. Stopping extraction.");
+            showFeedback("TuneTransporter: Reached max scroll iterations.", 2000);
+        }
+
+        console.log(`TuneTransporter: Finished extraction. Total unique tracks found: ${extractedTracks.size}`);
+        const finalTracks = Array.from(extractedTracks.values()); // Convert Map values to an array
+
+        if (finalTracks.length > 0) {
+            const formattedList = finalTracks.map(t => `${t.title} - ${t.artist}`).join('\n');
+            console.log(`TuneTransporter: Sending ${finalTracks.length} tracks back to popup after scrolling.`);
+            showFeedback(`TuneTransporter: Found ${finalTracks.length} total tracks.`, 2000);
+            sendResponse({ success: true, count: finalTracks.length, tracks: formattedList });
+        } else {
+            console.log("TuneTransporter: No tracks found or extracted after scrolling.");
+            showFeedback("TuneTransporter: No tracks found after scrolling.", 3000);
+            sendResponse({ success: true, count: 0, tracks: null });
+        }
+
+    } catch (error) {
+        console.error("TuneTransporter: Error during scroll/extraction process:", error);
+        showFeedback(`TuneTransporter: Error during scroll/extraction: ${error.message}`, 4000);
+        sendResponse({ success: false, error: `Scroll/Extraction Error: ${error.message}` });
+    }
+}
+
+
+// --- Message Listener for Popup Actions ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Listen for the new action from popup.js
     if (request.action === "getSpotifyAlbumTracks") { // Changed action name
-        console.log("TuneTransporter: Received request to get album tracks."); // Updated log
-        // *** MODIFIED CHECK: Now check for ALBUM page ***
+        console.log("TuneTransporter: Received request to get album/playlist/collection tracks."); // Updated log
         const currentPath = window.location.pathname;
         const allowedPaths = ['/album/', '/playlist/', '/collection/tracks'];
         const isAllowedPage = allowedPaths.some(path => currentPath.startsWith(path));
@@ -344,30 +510,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true; // Stop processing
         }
 
-        showFeedback("TuneTransporter: Extracting visible tracks...", 1500); // Show feedback briefly
-        try {
-            // Use the renamed function
-            const tracks = extractVisibleSpotifyTracks();
+        // Call the new function that handles virtual scrolling AND extraction
+        scrollAndExtractAllTracks(sendResponse);
 
-            if (tracks.length > 0) {
-                const formattedList = tracks.map(t => `${t.title} - ${t.artist}`).join('\n');
-                // Send the formatted list back to the popup script
-                console.log(`TuneTransporter: Sending ${tracks.length} tracks back to popup.`);
-                sendResponse({ success: true, count: tracks.length, tracks: formattedList });
-            } else {
-                console.log("TuneTransporter: No tracks found or extracted from visible rows.");
-                showFeedback("TuneTransporter: No visible tracks found.", 3000);
-                // Still send success, but with count 0 and no tracks string
-                sendResponse({ success: true, count: 0, tracks: null });
-            }
-        } catch (error) {
-            console.error("TuneTransporter: Error during album track extraction:", error);
-            showFeedback(`TuneTransporter: Error extracting tracks: ${error.message}`, 4000);
-            sendResponse({ success: false, error: error.message });
-        }
-        return true; // Indicate async response
+        return true; // Indicate async response is expected
     }
-    return false;
+    return false; // Not our message
 });
 
 
