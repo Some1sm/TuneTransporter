@@ -104,7 +104,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyYtmLinkBtn = document.getElementById('copyYtmLinkBtn');
     const copySpotifyLinkBtn = document.getElementById('copySpotifyLinkBtn');
     const copyInfoBtn = document.getElementById('copyInfoBtn');
-    const copySpotifyPlaylistBtn = document.getElementById('copySpotifyPlaylistBtn'); // Keep ID for now, represents "Copy Album Tracks"
+    const copySpotifyPlaylistBtn = document.getElementById('copySpotifyPlaylistBtn'); // Spotify Playlist/Album/Collection Tracks
+    const copyYtmPlaylistBtn = document.getElementById('copyYtmPlaylistBtn'); // YTM Playlist Tracks
 
     // Load toggle settings
     chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
@@ -131,6 +132,7 @@ document.addEventListener('DOMContentLoaded', function () {
             copySpotifyLinkBtn.disabled = true;
             copyInfoBtn.disabled = true;
             copySpotifyPlaylistBtn.disabled = true;
+            copyYtmPlaylistBtn.disabled = true;
             return;
         }
 
@@ -141,7 +143,8 @@ document.addEventListener('DOMContentLoaded', function () {
         let canCopyYtm = false;
         let canCopySpotify = false;
         let canCopyInfo = false;
-        let canCopyAlbumTracks = false; // Renamed flag for clarity
+        let canCopySpotifyPlaylist = false; // Flag for Spotify playlist/album/collection
+        let canCopyYtmPlaylist = false; // Flag for YTM playlist
         let currentSourceType = null;
         let statusMsg = "";
 
@@ -157,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
                  console.log("[Popup Debug] Spotify URL is album.");
                  canCopyYtm = true; // Can still copy YTM link from album
                  canCopyInfo = true; // Can still copy basic album info
-                 canCopyAlbumTracks = true; // *** Enable album track copy ***
+                 canCopySpotifyPlaylist = true; // Enable Spotify track copy
                  currentSourceType = 'spotify';
             } else if (currentUrl.includes("/artist/")) {
                  console.log("[Popup Debug] Spotify URL is artist.");
@@ -166,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
                  currentSourceType = 'spotify';
             } else if (currentUrl.includes("/playlist/") || currentUrl.includes("/collection/tracks")) { // Added playlist and collection check
                  console.log("[Popup Debug] Spotify URL is playlist or collection.");
-                 canCopyAlbumTracks = true; // *** Enable track copy for playlists/collection ***
+                 canCopySpotifyPlaylist = true; // Enable Spotify track copy
                  canCopyInfo = true; // Can still copy basic info (though it might be less relevant for collection)
                  currentSourceType = 'spotify';
             } else {
@@ -176,11 +179,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         else if (currentUrl.startsWith("https://music.youtube.com/")) {
             console.log("[Popup Debug] URL is YTM.");
-            if (currentUrl.includes("/watch?") || currentUrl.includes("/playlist?list=") || currentUrl.includes("/channel/")) {
-                console.log("[Popup Debug] YTM URL is song/playlist/artist.");
+            if (currentUrl.includes("/watch?")) { // YTM Song
+                console.log("[Popup Debug] YTM URL is song.");
                 canCopySpotify = true;
                 canCopyInfo = true;
                 currentSourceType = 'ytm';
+            } else if (currentUrl.includes("/playlist?list=")) { // YTM Playlist/Album
+                 console.log("[Popup Debug] YTM URL is playlist/album.");
+                 canCopySpotify = true; // Can still copy Spotify link for the playlist/album itself
+                 canCopyInfo = true; // Can still copy basic playlist/album info
+                 canCopyYtmPlaylist = true; // *** Enable YTM playlist track copy ***
+                 currentSourceType = 'ytm';
+            } else if (currentUrl.includes("/channel/")) { // YTM Artist
+                 console.log("[Popup Debug] YTM URL is artist.");
+                 canCopySpotify = true;
+                 canCopyInfo = true;
+                 currentSourceType = 'ytm';
             } else {
                 console.log("[Popup Debug] YTM URL is other type.");
                 statusMsg = "Not a YTM song/playlist/artist.";
@@ -195,28 +209,31 @@ document.addEventListener('DOMContentLoaded', function () {
             statusMsg = "Not on Spotify or YTM.";
         }
         // Log flags using the new name
-        console.log(`[Popup Debug] Flags after check: canCopyYtm=${canCopyYtm}, canCopySpotify=${canCopySpotify}, canCopyInfo=${canCopyInfo}, canCopyAlbumTracks=${canCopyAlbumTracks}, currentSourceType=${currentSourceType}`);
+        console.log(`[Popup Debug] Flags after check: canCopyYtm=${canCopyYtm}, canCopySpotify=${canCopySpotify}, canCopyInfo=${canCopyInfo}, canCopySpotifyPlaylist=${canCopySpotifyPlaylist}, canCopyYtmPlaylist=${canCopyYtmPlaylist}, currentSourceType=${currentSourceType}`);
 
         // --- Set disabled states ---
         copyYtmLinkBtn.disabled = !canCopyYtm;
         copySpotifyLinkBtn.disabled = !canCopySpotify;
         copyInfoBtn.disabled = !canCopyInfo;
-        copySpotifyPlaylistBtn.disabled = !canCopyAlbumTracks; // Use the new flag
-        // Log states using the new flag name
-        console.log(`[Popup Debug] Button states set: copyYtmLinkBtn.disabled=${copyYtmLinkBtn.disabled}, copySpotifyLinkBtn.disabled=${copySpotifyLinkBtn.disabled}, copyInfoBtn.disabled=${copyInfoBtn.disabled}, copySpotifyPlaylistBtn.disabled=${copySpotifyPlaylistBtn.disabled}`);
+        copySpotifyPlaylistBtn.disabled = !canCopySpotifyPlaylist;
+        copyYtmPlaylistBtn.disabled = !canCopyYtmPlaylist;
+        // Log states using the new flag names
+        console.log(`[Popup Debug] Button states set: copyYtmLinkBtn.disabled=${copyYtmLinkBtn.disabled}, copySpotifyLinkBtn.disabled=${copySpotifyLinkBtn.disabled}, copyInfoBtn.disabled=${copyInfoBtn.disabled}, copySpotifyPlaylistBtn.disabled=${copySpotifyPlaylistBtn.disabled}, copyYtmPlaylistBtn.disabled=${copyYtmPlaylistBtn.disabled}`);
 
         // *** FINAL CHECK LOGS ***
         console.log(`[Popup Debug] FINAL CHECK: copyInfoBtn element disabled property is: ${copyInfoBtn.disabled}`);
         console.log(`[Popup Debug] FINAL CHECK: copySpotifyPlaylistBtn element disabled property is: ${copySpotifyPlaylistBtn.disabled}`);
+        console.log(`[Popup Debug] FINAL CHECK: copyYtmPlaylistBtn element disabled property is: ${copyYtmPlaylistBtn.disabled}`);
 
         // --- Set click handlers ---
         copyYtmLinkBtn.onclick = canCopyYtm ? () => handleCopyLinkClick('spotify', tabId) : null;
         copySpotifyLinkBtn.onclick = canCopySpotify ? () => handleCopyLinkClick('ytm', tabId) : null;
         copyInfoBtn.onclick = canCopyInfo ? () => handleCopyInfoClick(currentSourceType, tabId) : null;
-        copySpotifyPlaylistBtn.onclick = canCopyAlbumTracks ? () => handleCopySpotifyAlbumTracksClick(tabId) : null; // Use new flag and renamed handler
+        copySpotifyPlaylistBtn.onclick = canCopySpotifyPlaylist ? () => handleCopySpotifyPlaylistTracksClick(tabId) : null; // Use updated flag and handler name
+        copyYtmPlaylistBtn.onclick = canCopyYtmPlaylist ? () => handleCopyFullYtmPlaylist(tabId) : null; // Add handler for YTM playlist button
 
 
-        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && copyInfoBtn.disabled && copySpotifyPlaylistBtn.disabled && statusMsg) {
+        if (copyYtmLinkBtn.disabled && copySpotifyLinkBtn.disabled && copyInfoBtn.disabled && copySpotifyPlaylistBtn.disabled && copyYtmPlaylistBtn.disabled && statusMsg) {
             showStatus(statusMsg, 0);
         } else {
             showStatus("");
@@ -338,9 +355,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } // End handleCopyInfoClick
 
-    // --- Handle Copy SPOTIFY ALBUM TRACKS Button Click ---
-    // Renamed function for clarity and modified to handle copy within popup
-    async function handleCopySpotifyAlbumTracksClick(tabId) { // Renamed function
+    // --- Handle Copy SPOTIFY PLAYLIST/ALBUM/COLLECTION TRACKS Button Click ---
+    // Renamed function for clarity
+    async function handleCopySpotifyPlaylistTracksClick(tabId) { // Renamed function
         showStatus("Getting album tracks...", 0); // Updated status message
         try {
             // Send message to the content script to GET the tracks
@@ -384,6 +401,102 @@ document.addEventListener('DOMContentLoaded', function () {
                  showStatus(`Error: ${error.message}`, 4000);
             }
         }
-    } // End handleCopySpotifyAlbumTracksClick
+    } // End handleCopySpotifyPlaylistTracksClick
+
+
+    // --- Handle Copy FULL YTM PLAYLIST Button Click ---
+    async function handleCopyFullYtmPlaylist(tabId) {
+        showStatus("Extracting YTM playlist (may take time)...", 0);
+        try {
+            // 1. Inject necessary script files
+            console.log("[Popup Debug] Injecting YTM playlist scripts...");
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['utils.js', 'ytm-playlist-content.js']
+            });
+            console.log("[Popup Debug] Scripts injected.");
+
+            // 2. Execute the extraction function (now that scripts are loaded)
+            console.log("[Popup Debug] Executing YTM playlist extraction function...");
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: (containerSelector, trackRowSelector) => {
+                    // This function now executes in the target tab's context
+                    // where scrollAndExtractAllYtmTracks should be defined.
+                    if (typeof scrollAndExtractAllYtmTracks === 'function') {
+                        return scrollAndExtractAllYtmTracks(containerSelector, trackRowSelector);
+                    } else {
+                        // Throw an error if the function isn't found after injection
+                        throw new Error("scrollAndExtractAllYtmTracks function not found after script injection.");
+                    }
+                },
+                args: [
+                    'ytmusic-playlist-shelf-renderer > div#contents', // More specific container selector
+                    'ytmusic-responsive-list-item-renderer' // Track row selector remains the same
+                ]
+            });
+            console.log("[Popup Debug] Injected scripts and initiated YTM playlist extraction.");
+            console.log("[Popup Debug] YTM playlist script execution results:", results);
+
+           // 3. Process results
+           if (chrome.runtime.lastError) {
+               // Check if the error is due to the page context being invalidated (e.g., tab closed/navigated)
+               if (chrome.runtime.lastError.message.includes("Could not establish connection") || chrome.runtime.lastError.message.includes("Receiving end does not exist")) {
+                    console.warn("Connection to tab lost during YTM playlist extraction.");
+                    showStatus("Error: Connection to YTM page lost.", 4000);
+                    return; // Stop processing
+               }
+               throw new Error(`Script execution failed: ${chrome.runtime.lastError.message}`);
+           }
+
+           // Check if results array exists and has the expected structure
+           if (results && results[0] && typeof results[0].result !== 'undefined') {
+                 const tracks = results[0].result; // This should be the array of {title, artist} or []
+
+                 // Validate that tracks is an array
+                 if (!Array.isArray(tracks)) {
+                     console.error("YTM playlist extraction script did not return an array.", results[0].result);
+                     throw new Error("Extraction script returned invalid data type.");
+                 }
+
+                 if (tracks.length > 0) {
+                     const formattedList = tracks.map(t => `${t.title} - ${t.artist}`).join('\n');
+                     await navigator.clipboard.writeText(formattedList);
+                     // Update status message to reflect total count (incl. duplicates)
+                     showStatus(`Copied ${tracks.length} total tracks from YTM playlist!`);
+                     console.log(`Copied ${tracks.length} total tracks from YTM playlist to clipboard.`);
+                 } else {
+                      showStatus("No tracks found or extracted from YTM playlist.");
+                      console.log("YTM playlist extraction script ran successfully but found 0 tracks.");
+                 }
+             } else {
+                  // This case handles scenarios where the script injection might have succeeded,
+                  // but the execution of the 'func' failed silently or returned undefined/null unexpectedly.
+                  console.error("YTM playlist extraction script did not return expected results structure.", results);
+                  // Attempt to check for specific errors if available in the result frame
+                  const frameResult = results && results[0];
+                  if (frameResult && frameResult.error) {
+                      throw new Error(`Script execution error: ${frameResult.error.message || 'Unknown error'}`);
+                  } else {
+                      throw new Error("Failed to execute YTM playlist extraction script or script returned invalid data.");
+                  }
+             }
+
+        } catch (error) {
+            console.error("Error copying full YTM playlist:", error);
+            // Provide more specific user feedback based on error type
+            if (error.message.includes("Could not establish connection") || error.message.includes("Receiving end does not exist") || error.message.includes("Cannot access contents of url") || error.message.includes("No tab with id")) {
+                 showStatus("Error: Cannot access YTM page. Try reloading the page or ensure it's open.", 5000);
+            } else if (error.message.includes("Playlist container not found")) {
+                 // This specific error comes from the content script itself
+                 showStatus("Error: Could not find playlist content on the page.", 5000);
+            } else if (error.message.includes("processArtistString is not defined") || error.message.includes("showFeedback is not defined") || error.message.includes("delay is not defined")) {
+                 showStatus("Error: Script dependency missing. Please report this bug.", 5000);
+            } else {
+                 showStatus(`Error: ${error.message}`, 5000); // General error
+            }
+        }
+    } // End handleCopyFullYtmPlaylist
+
 
 }); // End DOMContentLoaded
