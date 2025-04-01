@@ -451,20 +451,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
            // Check if results array exists and has the expected structure
            if (results && results[0] && typeof results[0].result !== 'undefined') {
-                 const tracks = results[0].result; // This should be the array of {title, artist} or []
+                 const resultData = results[0].result; // This should be {title: string, tracks: array}
 
-                 // Validate that tracks is an array
-                 if (!Array.isArray(tracks)) {
-                     console.error("YTM playlist extraction script did not return an array.", results[0].result);
-                     throw new Error("Extraction script returned invalid data type.");
+                 // Validate the structure
+                 if (!resultData || typeof resultData !== 'object' || !Array.isArray(resultData.tracks) || typeof resultData.title !== 'string') {
+                     console.error("YTM playlist extraction script did not return the expected {title, tracks} object.", resultData);
+                     throw new Error("Extraction script returned invalid data structure.");
                  }
 
+                 const playlistTitle = resultData.title || "Unknown Playlist";
+                 const tracks = resultData.tracks;
+
                  if (tracks.length > 0) {
-                     const formattedList = tracks.map(t => `${t.title} - ${t.artist}`).join('\n');
+                     const trackListString = tracks.map(t => `${t.title} - ${t.artist}`).join('\n');
+                     // Prepend the playlist title
+                     const formattedList = `${playlistTitle}\n\n${trackListString}`;
                      await navigator.clipboard.writeText(formattedList);
-                     // Update status message to reflect total count (incl. duplicates)
-                     showStatus(`Copied ${tracks.length} total tracks from YTM playlist!`);
-                     console.log(`Copied ${tracks.length} total tracks from YTM playlist to clipboard.`);
+                     // Update status message
+                     showStatus(`Copied "${playlistTitle}" (${tracks.length} total tracks)!`);
+                     console.log(`Copied "${playlistTitle}" (${tracks.length} total tracks) from YTM playlist to clipboard.`);
                  } else {
                       showStatus("No tracks found or extracted from YTM playlist.");
                       console.log("YTM playlist extraction script ran successfully but found 0 tracks.");

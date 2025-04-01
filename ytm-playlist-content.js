@@ -86,9 +86,16 @@ function extractYtmTrackInfoFromRow(rowElement) {
 }
 
 
-// Main async function to scroll and extract YTM tracks
+// Main async function to scroll and extract YTM tracks and title
 // This function will be executed in the target tab's context
 async function scrollAndExtractAllYtmTracks(containerSelector, trackRowSelector) {
+    // --- Extract Playlist Title ---
+    const playlistTitleSelector = 'ytmusic-responsive-header-renderer h1 yt-formatted-string.title';
+    const playlistTitleElement = document.querySelector(playlistTitleSelector);
+    const playlistTitle = playlistTitleElement ? playlistTitleElement.textContent?.trim() : 'Unknown Playlist';
+    console.log(`TuneTransporter: Found playlist title: "${playlistTitle}"`);
+    // --- End Playlist Title Extraction ---
+
   // YTM often scrolls the main window or a specific container like '#contents' or 'ytmusic-browse-response'
   // Let's try scrolling the window first, then fallback to a container if needed
   const scrollTarget = window; // Or document.querySelector('#contents') or other container
@@ -211,8 +218,9 @@ async function scrollAndExtractAllYtmTracks(containerSelector, trackRowSelector)
 
   // Keep this essential final log
   console.log(`TuneTransporter: Finished YTM extraction. Total tracks found (incl. duplicates): ${extractedTracks.length}.`); // Use .length and update text
-  feedback(`TuneTransporter: Finished. Found ${extractedTracks.length} total tracks.`, 3000); // Use .length and update text
-  return extractedTracks; // Return the array directly
+  feedback(`TuneTransporter: Finished. Found ${extractedTracks.length} total tracks.`, 3000);
+  // Return both title and tracks
+  return { title: playlistTitle, tracks: extractedTracks };
 }
 
 // Note: This script relies on `utils.js` (for processArtistString and showFeedback)
