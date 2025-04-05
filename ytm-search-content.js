@@ -66,7 +66,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
            console.error("[YTM Search Content Script] Could not find a suitable song item even after observer.");
            feedback("Could not find song item on search page. Skipping.", 4000);
            // Skip to next song logic (needs access to tracks/index) - Refactor needed or pass data
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error finding song item, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
        console.log("[YTM Search Content Script] Found song item:", songItemElement);
@@ -89,7 +92,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
        if (!optionsButton) {
            console.error("[YTM Search Content Script] Could not find options button (three dots) for the song/card.");
            feedback("Error finding song options. Skipping.", 4000);
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error finding options button, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
 
@@ -107,7 +113,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
        if (!menuPopup) {
            console.error("[YTM Search Content Script] Options menu popup did not appear.");
            feedback("Error opening song options menu. Skipping.", 4000);
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error opening options menu, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
 
@@ -131,7 +140,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
             // Attempt to close the menu by clicking outside (optional)
            document.body.click();
             if (typeof delay === 'function') await delay(200);
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error finding save link, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
 
@@ -148,7 +160,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
        if (!dialogElement) {
            console.error("[YTM Search Content Script] 'Save to playlist' dialog did not appear.");
            feedback("Error opening 'Save to playlist' dialog. Skipping.", 4000);
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error opening save dialog, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
 
@@ -172,7 +187,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
            const closeButton = dialogElement.querySelector('yt-button-shape[aria-label="Dismiss"] button');
            if (closeButton) closeButton.click();
            if (typeof delay === 'function') await delay(200);
-           goToLibraryForNextSong(); // Removed await and delay argument
+           // Disable image blocking before navigating on error
+           console.log("[YTM Search Content Script] Error finding target playlist, sending message to disable image blocking.");
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           goToLibraryForNextSong();
            return;
        }
 
@@ -180,7 +198,7 @@ async function processFirstSongResult(targetPlaylistTitle) {
        targetPlaylistElement.click();
        feedback(`Added song to playlist: ${targetPlaylistTitle}`, 2500);
        // Wait slightly longer here for action to complete and dialog to close fully before proceeding
-       if (typeof delay === 'function') await delay(750); else await new Promise(resolve => setTimeout(resolve, 750)); // Reduced by 50%
+       if (typeof delay === 'function') await delay(375); else await new Promise(resolve => setTimeout(resolve, 375)); // Reduced further
 
        // --- 5. Proceed to the next song or finish ---
        console.log("[YTM Search Content Script] Song added successfully. Checking for next song.");
@@ -189,7 +207,10 @@ async function processFirstSongResult(targetPlaylistTitle) {
    } catch (error) {
        console.error("[YTM Search Content Script] Error in processFirstSongResult:", error);
        feedback(`Error processing song: ${error.message}. Skipping.`, 5000);
-       goToLibraryForNextSong(); // Removed await and delay argument
+       // Disable image blocking before navigating on error
+       console.log("[YTM Search Content Script] Error during song processing, sending message to disable image blocking.");
+       chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+       goToLibraryForNextSong();
    }
 }
 
@@ -216,6 +237,9 @@ function proceedToNextSongOrFinish() {
         sessionStorage.removeItem(CURRENT_TRACK_KEY);
         sessionStorage.removeItem(TARGET_TITLE_KEY);
         sessionStorage.removeItem(TRACKS_KEY);
+        // Disable image blocking before navigating on error
+        console.log("[YTM Search Content Script] Error missing track data, sending message to disable image blocking.");
+        chrome.runtime.sendMessage({ action: "disableImageBlocking" });
         window.location.href = `https://music.youtube.com/library/playlists`; // Go back on error
         return;
    }
@@ -253,7 +277,10 @@ window.location.href = nextSearchUrl;
            sessionStorage.removeItem(CURRENT_TRACK_KEY);
            sessionStorage.removeItem(TARGET_TITLE_KEY);
            sessionStorage.removeItem(TRACKS_KEY);
-           console.log("[YTM Search Content Script] Cleared flags. Navigating back to library.");
+           console.log("[YTM Search Content Script] Cleared flags. Sending message to disable image blocking.");
+           // Disable image blocking on successful completion
+           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+           console.log("[YTM Search Content Script] Navigating back to library.");
            // Use await delay here if needed, but it's inside a non-async function now
            setTimeout(() => {
                 window.location.href = `https://music.youtube.com/library/playlists`;
@@ -267,6 +294,9 @@ window.location.href = nextSearchUrl;
         sessionStorage.removeItem(CURRENT_TRACK_KEY);
         sessionStorage.removeItem(TARGET_TITLE_KEY);
         sessionStorage.removeItem(TRACKS_KEY);
+        // Disable image blocking before navigating on error
+        console.log("[YTM Search Content Script] Error preparing next song, sending message to disable image blocking.");
+        chrome.runtime.sendMessage({ action: "disableImageBlocking" });
         window.location.href = `https://music.youtube.com/library/playlists`; // Go back on error
    }
 }
@@ -374,6 +404,9 @@ async function handleSearchPage() {
             sessionStorage.removeItem(TARGET_TITLE_KEY);
             sessionStorage.removeItem(TRACKS_KEY); // Clear remaining tracks too on error
             console.log("[YTM Search Content Script] Cleared flags due to error. Navigating back to library.");
+            // Disable image blocking before navigating on error
+            console.log("[YTM Search Content Script] Error in handleSearchPage, sending message to disable image blocking.");
+            chrome.runtime.sendMessage({ action: "disableImageBlocking" });
             window.location.href = `https://music.youtube.com/library/playlists`;
        } catch (cleanupError) {
             console.error("[YTM Search Content Script] Error during cleanup navigation:", cleanupError);

@@ -36,6 +36,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => { 
                     // console.log("[YTM Library Content Script] User confirmed creation. Calling createYtmPlaylist..."); // Removed debug log
                     try {
                          feedback("Initiating playlist creation...", 0); // Show feedback immediately
+                         // Enable image blocking
+                         console.log("[YTM Library Content Script] Sending message to enable image blocking.");
+                         chrome.runtime.sendMessage({ action: "enableImageBlocking" });
                          // Await the creation directly
                         const creationResult = await createYtmPlaylist(initialPlaylistTitle); // Keep call
                         // console.log("[YTM Library Content Script] createYtmPlaylist result:", creationResult); // Removed debug log
@@ -68,19 +71,30 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => { 
                              } else {
                                  console.log("[YTM Library Content Script] No tracks provided, finishing process.");
                                  feedback("No tracks to add.", 3000);
+                                 // Disable image blocking if no tracks
+                                 console.log("[YTM Library Content Script] No tracks, sending message to disable image blocking.");
+                                 chrome.runtime.sendMessage({ action: "disableImageBlocking" });
                                  // No need to set flags if there are no tracks
                              }
         
                         } else { // Keep else block
                               feedback(`Playlist creation failed: ${creationResult.error || 'Unknown error'}`, 6000);
+                              // Disable image blocking on failure
+                              console.log("[YTM Library Content Script] Playlist creation failed, sending message to disable image blocking.");
+                              chrome.runtime.sendMessage({ action: "disableImageBlocking" });
                          } // Keep else block
                     } catch (error) { // Keep catch block
                         console.error("Error calling createYtmPlaylist:", error); // Keep error log
                          feedback(`Error during creation: ${error.message}`, 6000);
+                         // Disable image blocking on error
+                         console.log("[YTM Library Content Script] Error during creation, sending message to disable image blocking.");
+                         chrome.runtime.sendMessage({ action: "disableImageBlocking" });
             }
         } else { // Keep else block
             // console.log("[YTM Library Content Script] User cancelled creation prompt."); // Removed debug log
-                // Clear potentially stored tracks if user cancels here? Maybe not necessary.
+                // Disable image blocking if user cancels
+                console.log("[YTM Library Content Script] User cancelled, sending message to disable image blocking.");
+                chrome.runtime.sendMessage({ action: "disableImageBlocking" });
             }
         // Removed dangling setTimeout closing syntax: }, 100);
 
