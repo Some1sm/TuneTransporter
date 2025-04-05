@@ -82,32 +82,32 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 // --- Listener for enabling/disabling rules ---
-const IMAGE_BLOCKING_RULESET_ID = "ruleset_1";
+const IMAGE_BLOCKING_RULESET_ID = "ruleset_1"; // Static ruleset defined in rules.json
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "enableImageBlocking") {
-        console.log("[Service Worker] Enabling image blocking ruleset.");
+        console.log("[Service Worker] Enabling image blocking ruleset (ruleset_1)."); // Updated log
         chrome.declarativeNetRequest.updateEnabledRulesets({
             enableRulesetIds: [IMAGE_BLOCKING_RULESET_ID]
         }, () => {
             if (chrome.runtime.lastError) {
                 console.error("[Service Worker] Error enabling ruleset:", chrome.runtime.lastError);
             } else {
-                console.log("[Service Worker] Image blocking ruleset enabled.");
+                console.log("[Service Worker] Ruleset ruleset_1 enabled."); // Updated log
             }
         });
         // Optional: Send response back if needed
         // sendResponse({ success: true });
         return true; // Indicate async potential if using sendResponse
     } else if (message.action === "disableImageBlocking") {
-        console.log("[Service Worker] Disabling image blocking ruleset.");
+        console.log("[Service Worker] Disabling image blocking ruleset (ruleset_1)."); // Updated log
         chrome.declarativeNetRequest.updateEnabledRulesets({
             disableRulesetIds: [IMAGE_BLOCKING_RULESET_ID]
         }, () => {
             if (chrome.runtime.lastError) {
                 console.error("[Service Worker] Error disabling ruleset:", chrome.runtime.lastError);
             } else {
-                console.log("[Service Worker] Image blocking ruleset disabled.");
+                console.log("[Service Worker] Ruleset ruleset_1 disabled."); // Updated log
             }
         });
         // Optional: Send response back if needed
