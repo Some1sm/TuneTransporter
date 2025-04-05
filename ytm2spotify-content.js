@@ -1,7 +1,26 @@
 ﻿﻿// TuneTransporter/ytm2spotify-content.js
 // NOTE: showFeedback and processArtistString functions are now loaded from utils.js
-console.log("TuneTransporter: YouTube Music to Spotify script loaded.");
 
+// --- Check if playlist processing is active ---
+let isProcessing = false;
+try {
+    if (sessionStorage.getItem('tuneTransporterProcessing') === 'true') {
+        isProcessing = true;
+        console.log("TuneTransporter (YTM->Spotify): Playlist processing active (flag found). Halting YTM->Spotify script execution.");
+    } else {
+        console.log("TuneTransporter (YTM->Spotify): No processing flag found. Proceeding.");
+    }
+} catch (e) {
+    console.error("TuneTransporter (YTM->Spotify): Error checking sessionStorage flag:", e);
+    // Decide whether to proceed or halt if the check fails. Let's halt to be safe.
+    isProcessing = true; // Assume processing if check fails
+    console.warn("TuneTransporter (YTM->Spotify): Halting script due to error checking processing flag.");
+}
+// ---------------------------------------------
+
+// Only run the main logic if not processing
+if (!isProcessing) {
+    console.log("TuneTransporter: YouTube Music to Spotify script executing main logic.");
 // --- Constants ---
 const YTM_OBSERVER_TIMEOUT_MS = 10000; // 10 seconds timeout for watch pages
 
@@ -249,3 +268,5 @@ chrome.storage.local.get(['tuneTransporterFromSpotify'], function (flagResult) {
         }
     });
 });
+
+} // End of the main "if (!isProcessing)" block
