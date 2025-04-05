@@ -312,7 +312,24 @@ async function handleSearchPage() {
 
        if (isProcessing && nextStep === 'findSongOnSearchPage') {
            console.log("[YTM Search Content Script] Correct state found. Waiting for search results...");
-           feedback("Waiting for search results...", 3000);
+
+           // --- Add progress to feedback ---
+           let progressText = "";
+           try {
+               const currentTrackIndexStr = sessionStorage.getItem(CURRENT_TRACK_KEY);
+               const tracksJson = sessionStorage.getItem(TRACKS_KEY);
+               if (currentTrackIndexStr !== null && tracksJson) {
+                   const currentTrackIndex = parseInt(currentTrackIndexStr, 10);
+                   const tracks = JSON.parse(tracksJson);
+                   if (!isNaN(currentTrackIndex) && Array.isArray(tracks)) {
+                       progressText = ` (Song ${currentTrackIndex + 1}/${tracks.length})`;
+                   }
+               }
+           } catch (e) {
+               console.error("[YTM Search Content Script] Error getting progress data for feedback:", e);
+           }
+           feedback(`Waiting for search results${progressText}...`, 3000);
+           // --- End progress feedback ---
 
            const targetPlaylistTitle = sessionStorage.getItem(TARGET_TITLE_KEY);
            if (!targetPlaylistTitle) {
