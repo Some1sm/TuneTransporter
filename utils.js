@@ -123,6 +123,15 @@ if (typeof window.showFeedback === 'undefined') {
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null; // Option: Join primary artists
     }
 
+    /**
+     * Returns a promise that resolves after a specified number of milliseconds.
+     * @param {number} ms The number of milliseconds to wait.
+     * @returns {Promise<void>}
+     */
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     // Mark utils as loaded
     window.tuneTransporterUtilsLoaded = true;
     console.log("TuneTransporter utils.js loaded.");
