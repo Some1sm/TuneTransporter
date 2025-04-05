@@ -59,6 +59,21 @@
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [ "yt-fallback-content.js" ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [ "*://music.youtube.com/library/playlists*" ],
+      "js": [ "utils.js", "ytm-playlist-content.js", "ytm-library-content.js" ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [ "*://music.youtube.com/search*" ],
+      "js": [ "utils.js", "ytm-search-content.js" ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [ "*://music.youtube.com/watch*" ],
+      "js": [ "utils.js", "ytm-watch-content.js" ],
+      "run_at": "document_idle"
     }
   ]
 }
