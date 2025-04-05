@@ -53,7 +53,7 @@ async function processFirstSongResult(targetPlaylistTitle) {
        if (!songItemElement) {
            console.log("[YTM Search Content Script] Top Result card not found. Waiting for song item in 'Songs' shelf...");
            // Add a small delay before checking the shelf
-           if (typeof delay === 'function') await delay(500); else await new Promise(resolve => setTimeout(resolve, 500));
+           if (typeof delay === 'function') await delay(250); else await new Promise(resolve => setTimeout(resolve, 250)); // Reduced by 50%
            songItemElement = await waitForElement(songItemShelfSelector, 5000); // Fallback to regular song shelf item
            if (songItemElement) {
                 console.log("[YTM Search Content Script] Found song item in shelf:", songItemElement);
@@ -180,7 +180,7 @@ async function processFirstSongResult(targetPlaylistTitle) {
        targetPlaylistElement.click();
        feedback(`Added song to playlist: ${targetPlaylistTitle}`, 2500);
        // Wait slightly longer here for action to complete and dialog to close fully before proceeding
-       if (typeof delay === 'function') await delay(1500); else await new Promise(resolve => setTimeout(resolve, 1500));
+       if (typeof delay === 'function') await delay(750); else await new Promise(resolve => setTimeout(resolve, 750)); // Reduced by 50%
 
        // --- 5. Proceed to the next song or finish ---
        console.log("[YTM Search Content Script] Song added successfully. Checking for next song.");
@@ -308,9 +308,9 @@ async function handleSearchPage() {
                console.log("[YTM Search Content Script] Search results already present on load.");
                // Wait a moment for stability before processing, similar to observer callback
                 if (typeof delay === 'function') {
-                    await delay(300); // Use await if handleSearchPage is async (it is)
+                    await delay(150); // Reduced by 50%
                 } else {
-                     await new Promise(resolve => setTimeout(resolve, 300)); // Fallback delay
+                     await new Promise(resolve => setTimeout(resolve, 150)); // Reduced by 50%
                 }
                processFirstSongResult(targetPlaylistTitle); // Process immediately
                return; // Don't set up the observer
@@ -332,9 +332,9 @@ async function handleSearchPage() {
                    // Wait a moment for rendering stability before processing
                    // Use await delay if available
                    if (typeof delay === 'function') {
-                       delay(300).then(() => processFirstSongResult(targetPlaylistTitle));
+                       delay(150).then(() => processFirstSongResult(targetPlaylistTitle)); // Reduced by 50%
                    } else {
-                        setTimeout(() => processFirstSongResult(targetPlaylistTitle), 300);
+                        setTimeout(() => processFirstSongResult(targetPlaylistTitle), 150); // Reduced by 50%
                    }
 
                }
