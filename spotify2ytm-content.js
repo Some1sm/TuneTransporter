@@ -54,7 +54,121 @@
  }
 
 
- // --- Spotify Extraction and Redirection Logic ---
+ // --- Spotify Page Handlers ---
+
+ // Extracts data and returns { item, artist } or null
+ function handleSpotifyTrackPage() {
+     console.log("TuneTransporter: Detected Spotify Track page.");
+     const titleRegex = /^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i;
+     let extractedData = _extractViaTitleRegex(titleRegex, 'Track');
+     if (!extractedData) {
+         const titleSelector = 'span[data-testid="entityTitle"] h1';
+         const artistSelector = 'a[data-testid="creator-link"]';
+         extractedData = _extractViaDOM(titleSelector, artistSelector, 'Track');
+     }
+     return extractedData ? { itemName: extractedData.item, artistName: extractedData.artist, isArtistSearch: false } : null;
+ }
+
+ // Extracts data and returns { item, artist } or null
+ function handleSpotifyAlbumPage() {
+     console.log("TuneTransporter: Detected Spotify Album/Single page.");
+     const albumTitleRegex = /^(.+?)\s+-\s+(?:Album|Single) by\s+(.+?)\s*(?:\| Spotify)?$/i;
+     let extractedData = _extractViaTitleRegex(albumTitleRegex, 'Album/Single');
+     if (!extractedData) {
+         const titleSelector = 'span[data-testid="entityTitle"] h1';
+         const artistSelector = 'a[data-testid="creator-link"]';
+         extractedData = _extractViaDOM(titleSelector, artistSelector, 'Album/Single');
+     }
+     return extractedData ? { itemName: extractedData.item, artistName: extractedData.artist, isArtistSearch: false } : null;
+ }
+
+ // Extracts data and returns { artist } or null
+ function handleSpotifyArtistPage() {
+     console.log("TuneTransporter: Detected Spotify Artist page.");
+     const titleRegex = /^(.+?)\s*(?:•.*?)?\s*(?:\| Spotify|- Listen on Spotify)\s*$/i;
+     let extractedData = _extractViaTitleRegex(titleRegex, 'Artist', true);
+     if (!extractedData) {
+         const titleSelector = 'span[data-testid="entityTitle"] h1';
+         extractedData = _extractViaDOM(titleSelector, null, 'Artist', true);
+     }
+     return extractedData ? { itemName: null, artistName: extractedData.artist, isArtistSearch: true } : null;
+ }
+
+ // Handles search page auto-navigation (doesn't return data for redirection)
+ function handleSpotifySearchPage() {
+     console.log("TuneTransporter: Detected Spotify Search Results page.");
+     const pathname = window.location.pathname;
+     const isArtistResultsPage = pathname.includes('/artists');
+     const isAlbumResultsPage = pathname.includes('/albums');
+     const maxAttempts = 40;
+     let attempts = 0;
+     let intervalId = null;
+     let feedbackMsg = "";
+     let selector = "";
+     let linkExtractor = null;
+
+     if (isArtistResultsPage) {
+         console.log("TuneTransporter: Detected Artist Search Results page. Trying to select the first artist...");
+         feedbackMsg = "TuneTransporter: Trying to select the first artist result...";
+         selector = 'div[data-testid="search-category-card-0"] a[href^="/artist/"]';
+         linkExtractor = (element) => {
+             const relativeUrl = element.getAttribute('href');
+             const nameFromCard = element.closest('[data-testid="search-category-card-0"]')?.querySelector('[data-encore-id="cardTitle"]')?.textContent?.trim() || 'Unknown Artist';
+             return { relativeUrl, name: nameFromCard, type: 'artist' };
+         };
+     } else if (isAlbumResultsPage) {
+         console.log("TuneTransporter: Detected Album Search Results page. Trying to select the first album...");
+         feedbackMsg = "TuneTransporter: Trying to select the first album result...";
+         selector = 'div[data-testid="search-category-card-0"] a[href^="/album/"]';
+         linkExtractor = (element) => {
+             const relativeUrl = element.getAttribute('href');
+             const nameFromCard = element.closest('[data-testid="search-category-card-0"]')?.querySelector('[data-encore-id="cardTitle"]')?.textContent?.trim() || 'Unknown Album';
+             return { relativeUrl, name: nameFromCard, type: 'album' };
+         };
+     } else {
+         console.log("TuneTransporter: Detected General/Track Search Results page. Trying to select the first track...");
+         feedbackMsg = "TuneTransporter: Trying to select the first track result...";
+         selector = 'div[data-testid="track-list"] div[data-testid="tracklist-row"]:first-of-type div[role="gridcell"][aria-colindex="2"] a[href^="/track/"]';
+         linkExtractor = (element) => {
+             const relativeUrl = element.getAttribute('href');
+             const nameFromLink = element.textContent?.trim() || 'Unknown Track';
+             return { relativeUrl, name: nameFromLink, type: 'track' };
+         };
+     }
+
+     showFeedback(feedbackMsg);
+     intervalId = setInterval(() => {
+         attempts++;
+         const firstLinkElement = document.querySelector(selector);
+         if (firstLinkElement && linkExtractor) {
+             clearInterval(intervalId);
+             const linkData = linkExtractor(firstLinkElement);
+             if (linkData.relativeUrl) {
+                 const targetUrl = `https://open.spotify.com${linkData.relativeUrl}`;
+                 showFeedback(`TuneTransporter: Automatically selecting first ${linkData.type}: ${linkData.name}`);
+                 sessionStorage.setItem('tuneTransporterRedirected', 'true'); // Set flag before redirect
+                 window.location.href = targetUrl;
+             } else {
+                 showFeedback(`TuneTransporter: Could not automatically select the first ${linkData.type} result (missing link).`);
+             }
+             return;
+         }
+         if (attempts >= maxAttempts) {
+             clearInterval(intervalId);
+             showFeedback(`TuneTransporter: Could not automatically select the first result (timeout).`);
+         }
+     }, 250);
+ }
+
+ function handleSpotifyPlaylistPage() {
+     // Keep original playlist behavior (no redirection, no copy button activation here)
+     console.log("TuneTransporter: Detected Spotify Playlist page. No automatic actions taken.");
+     // Does not return data for redirection
+     return null;
+ }
+
+
+ // --- Main Spotify Extraction and Redirection Logic ---
  function spotifyToYTM(settings) { // Pass settings in
      // Check for internal redirect flag first
      if (sessionStorage.getItem('tuneTransporterRedirected') === 'true') {
@@ -63,11 +177,8 @@
          return; // Stop the script
      }
 
-     let itemName = null;    // Track OR album/single title
-     let artistName = null;  // Artist name (always needed)
      const pathname = window.location.pathname;
-     let isArtistSearch = false; // Flag for artist-only searches
-     let isAlbumPageForCopy = false; // Flag to prevent redirection on album pages (NOW DISABLED BY DEFAULT)
+     let pageData = null; // Will hold { itemName, artistName, isArtistSearch }
 
      // --- Helper for Title Regex Extraction ---
      function _extractViaTitleRegex(regex, typeLabel, isArtistOnly = false) {
@@ -155,166 +266,41 @@
      }
 
      try {
-         // --- Detect Page Type ---
+         // --- Route to Page Handler ---
          if (pathname.startsWith('/track/')) {
-             console.log("TuneTransporter: Detected Spotify Track page.");
-             // --- Attempt Extraction for redirection ---
-             const titleRegex = /^(.+?)\s*[-–—]\s*(?:song|lyrics)\s*(?:and lyrics)?\s*by\s+(.+?)\s*(?:\| Spotify)?$/i;
-             let extractedData = _extractViaTitleRegex(titleRegex, 'Track');
-             if (!extractedData) {
-                 const titleSelector = 'span[data-testid="entityTitle"] h1';
-                 const artistSelector = 'a[data-testid="creator-link"]';
-                 extractedData = _extractViaDOM(titleSelector, artistSelector, 'Track');
-             }
-             if (extractedData) {
-                 itemName = extractedData.item;
-                 artistName = extractedData.artist;
-             }
-
-         } else if (pathname.startsWith('/album/')) { // This covers Albums AND Singles
-             console.log("TuneTransporter: Detected Spotify Album/Single page. Attempting info extraction for redirection..."); // MODIFIED LOG
-             // isAlbumPageForCopy = true; // Set flag to prevent redirection later // COMMENTED OUT
-             // --- Attempt Extraction for redirection ---
-             const albumTitleRegex = /^(.+?)\s+-\s+(?:Album|Single) by\s+(.+?)\s*(?:\| Spotify)?$/i; // Regex for Album/Single titles
-             let extractedData = _extractViaTitleRegex(albumTitleRegex, 'Album/Single');
-             if (!extractedData) {
-                 const titleSelector = 'span[data-testid="entityTitle"] h1'; // Same as track?
-                 const artistSelector = 'a[data-testid="creator-link"]'; // Same as track?
-                 extractedData = _extractViaDOM(titleSelector, artistSelector, 'Album/Single');
-             }
-             if (extractedData) {
-                 itemName = extractedData.item;
-                 artistName = extractedData.artist;
-             }
-             // No need to set isAlbumPageForCopy anymore
-
+             pageData = handleSpotifyTrackPage();
+         } else if (pathname.startsWith('/album/')) { // Covers Albums AND Singles
+             pageData = handleSpotifyAlbumPage();
          } else if (pathname.startsWith('/artist/')) {
-             console.log("TuneTransporter: Detected Spotify Artist page.");
-             isArtistSearch = true;
-             // --- Attempt Extraction for redirection ---
-             const titleRegex = /^(.+?)\s*(?:•.*?)?\s*(?:\| Spotify|- Listen on Spotify)\s*$/i;
-             let extractedData = _extractViaTitleRegex(titleRegex, 'Artist', true);
-             if (!extractedData) {
-                 const titleSelector = 'span[data-testid="entityTitle"] h1';
-                 extractedData = _extractViaDOM(titleSelector, null, 'Artist', true);
-             }
-             if (extractedData) {
-                 artistName = extractedData.artist;
-             }
-
+             pageData = handleSpotifyArtistPage();
          } else if (pathname.startsWith('/search/')) {
-             console.log("TuneTransporter: Detected Spotify Search Results page.");
-             const isArtistResultsPage = pathname.includes('/artists');
-             const isAlbumResultsPage = pathname.includes('/albums');
-             const maxAttempts = 40;
-             let attempts = 0;
-
-             if (isArtistResultsPage) {
-                 // ... (search artist logic remains the same) ...
-                 console.log("TuneTransporter: Detected Artist Search Results page. Trying to select the first artist...");
-                 showFeedback("TuneTransporter: Trying to select the first artist result...");
-                 const artistSelector = 'div[data-testid="search-category-card-0"] a[href^="/artist/"]';
-                 const artistIntervalId = setInterval(() => {
-                     attempts++;
-                     const firstArtistLinkElement = document.querySelector(artistSelector);
-                     if (firstArtistLinkElement) {
-                         clearInterval(artistIntervalId);
-                         const relativeUrl = firstArtistLinkElement.getAttribute('href');
-                         const artistNameFromCard = firstArtistLinkElement.closest('[data-testid="search-category-card-0"]')?.querySelector('[data-encore-id="cardTitle"]')?.textContent?.trim() || 'Unknown Artist';
-                         if (relativeUrl) {
-                             const artistUrl = `https://open.spotify.com${relativeUrl}`;
-                             showFeedback(`TuneTransporter: Automatically selecting first artist: ${artistNameFromCard}`);
-                             sessionStorage.setItem('tuneTransporterRedirected', 'true');
-                             window.location.href = artistUrl;
-                         } else {
-                             showFeedback("TuneTransporter: Could not automatically select the first artist result (missing link).");
-                         }
-                         return;
-                     }
-                     if (attempts >= maxAttempts) {
-                         clearInterval(artistIntervalId);
-                         showFeedback("TuneTransporter: Could not automatically select the first artist result (timeout).");
-                     }
-                 }, 250);
-             } else if (isAlbumResultsPage) {
-                  // ... (search album logic remains the same) ...
-                  console.log("TuneTransporter: Detected Album Search Results page. Trying to select the first album...");
-                  showFeedback("TuneTransporter: Trying to select the first album result...");
-                  const albumSelector = 'div[data-testid="search-category-card-0"] a[href^="/album/"]';
-                  const albumIntervalId = setInterval(() => {
-                      attempts++;
-                      const firstAlbumLinkElement = document.querySelector(albumSelector);
-                      if (firstAlbumLinkElement) {
-                          clearInterval(albumIntervalId);
-                          const relativeUrl = firstAlbumLinkElement.getAttribute('href');
-                          const albumNameFromCard = firstAlbumLinkElement.closest('[data-testid="search-category-card-0"]')?.querySelector('[data-encore-id="cardTitle"]')?.textContent?.trim() || 'Unknown Album';
-                          if (relativeUrl) {
-                              const albumUrl = `https://open.spotify.com${relativeUrl}`;
-                              showFeedback(`TuneTransporter: Automatically selecting first album: ${albumNameFromCard}`);
-                              sessionStorage.setItem('tuneTransporterRedirected', 'true');
-                              window.location.href = albumUrl;
-                          } else {
-                              showFeedback("TuneTransporter: Could not automatically select the first album result (missing link).");
-                          }
-                          return;
-                      }
-                      if (attempts >= maxAttempts) {
-                          clearInterval(albumIntervalId);
-                          showFeedback("TuneTransporter: Could not automatically select the first album result (timeout).");
-                      }
-                  }, 250);
-             } else {
-                 // ... (search track logic remains the same) ...
-                 console.log("TuneTransporter: Detected General/Track Search Results page. Trying to select the first track...");
-                 showFeedback("TuneTransporter: Trying to select the first track result...");
-                 const trackSelector = 'div[data-testid="track-list"] div[data-testid="tracklist-row"]:first-of-type div[role="gridcell"][aria-colindex="2"] a[href^="/track/"]';
-                 const trackIntervalId = setInterval(() => {
-                     attempts++;
-                     const firstTrackLinkElement = document.querySelector(trackSelector);
-                     if (firstTrackLinkElement) {
-                         clearInterval(trackIntervalId);
-                         const relativeUrl = firstTrackLinkElement.getAttribute('href');
-                         const trackTitle = firstTrackLinkElement.textContent?.trim() || 'Unknown Track';
-                         if (relativeUrl) {
-                             const trackUrl = `https://open.spotify.com${relativeUrl}`;
-                             showFeedback(`TuneTransporter: Automatically selecting first track: ${trackTitle}`);
-                             sessionStorage.setItem('tuneTransporterRedirected', 'true');
-                             window.location.href = trackUrl;
-                         } else {
-                             showFeedback("TuneTransporter: Could not automatically select the first track result (missing link).");
-                         }
-                         return;
-                     }
-                     if (attempts >= maxAttempts) {
-                         clearInterval(trackIntervalId);
-                         showFeedback("TuneTransporter: Could not automatically select the first track result (timeout).");
-                     }
-                 }, 250);
-             }
-             return; // Stop further execution for ALL search pages
-
+             handleSpotifySearchPage(); // Handles its own redirection/feedback
+             return; // Stop further execution for search pages
          } else if (pathname.startsWith('/playlist/')) {
-             // Keep original playlist behavior (no redirection, no copy button activation here)
-             console.log("TuneTransporter: Detected Spotify Playlist page. No automatic actions taken.");
-
-         } else { // Original 'else' block for unrecognized pages
+             pageData = handleSpotifyPlaylistPage(); // Returns null, no redirection needed
+         } else if (pathname.startsWith('/collection/')) {
+             // Currently handled by the message listener for track extraction, no redirection needed here.
+             console.log("TuneTransporter: Detected Spotify Collection page. No automatic redirection.");
+             return; // Stop further execution
+         } else {
              console.log("TuneTransporter: Page type not recognized for redirection:", pathname);
+             return; // Stop if page type is unknown
          }
 
-         // --- Final Check and Redirect to YTM (Common for Track, Artist, Album pages) ---
-         // Will be skipped for Playlist pages because artistName is null
-         // Will be skipped if extraction failed for Track/Artist/Album pages
-         if (!isAlbumPageForCopy && settings.spotifyEnabled !== false && artistName) { // isAlbumPageForCopy should always be false here now
+         // --- Final Check and Redirect to YTM (if applicable) ---
+         // Only proceed if pageData was returned (i.e., not search/playlist/collection/unknown)
+         // and redirection is enabled and artistName was found.
+         if (pageData && settings.spotifyEnabled !== false && pageData.artistName) {
              let searchQuery;
-             if (isArtistSearch) {
-                 searchQuery = artistName;
+             if (pageData.isArtistSearch) {
+                 searchQuery = pageData.artistName;
                  console.log(`TuneTransporter: Preparing YTM search for artist: "${searchQuery}" (Spotify->YTM enabled)`);
-             } else if (itemName) { // Should be true for Track and Album/Single pages now
-                 searchQuery = itemName + " " + artistName;
-                 console.log(`TuneTransporter: Preparing YTM search for item: "${itemName}", artist: "${artistName}" (Spotify->YTM enabled)`);
+             } else if (pageData.itemName) { // Should be true for Track and Album/Single pages now
+                 searchQuery = pageData.itemName + " " + pageData.artistName;
+                 console.log(`TuneTransporter: Preparing YTM search for item: "${pageData.itemName}", artist: "${pageData.artistName}" (Spotify->YTM enabled)`);
              } else {
                  console.warn("TuneTransporter: Artist name found but item name is missing for non-artist search. Aborting YTM redirect.");
-                 showFeedback("TuneTransporter: Could not find track/album info on this page."); // Updated feedback
+                 showFeedback("TuneTransporter: Could not find track/album info on this page.");
                  return; // Stop before YTM redirect
              }
 
@@ -325,27 +311,115 @@
                  window.location.href = youtubeMusicSearchUrl;
              });
 
-         } else if (settings.spotifyEnabled === false && artistName) {
+         } else if (pageData && settings.spotifyEnabled === false && pageData.artistName) {
               console.log("TuneTransporter: Spotify -> YTM redirection is disabled. Skipping YTM redirect.");
-         }
-          else if (!artistName && !pathname.startsWith('/search/') && !pathname.startsWith('/playlist/')) { // Adjusted condition slightly
+         } else if (pageData && !pageData.artistName) {
+             // This case applies if a handler ran (track/album/artist) but failed to extract artistName
              console.warn("TuneTransporter: Failed to extract required info (artist name) after processing. Cannot redirect to YTM.");
-             showFeedback("TuneTransporter: Could not find artist/track/album info on this page."); // Updated feedback
+             showFeedback("TuneTransporter: Could not find artist/track/album info on this page.");
          }
+         // No action needed if pageData is null (playlist, collection, unknown) or if artistName wasn't found.
 
      } catch (error) {
          console.error("TuneTransporter: Error during Spotify processing:", error);
          showFeedback("TuneTransporter: An unexpected error occurred.");
      }
  }
+ // --- Helper for Title Regex Extraction --- [KEEP THIS HELPER]
+ function _extractViaTitleRegex(regex, typeLabel, isArtistOnly = false) {
+     console.log(`TuneTransporter: Attempting ${typeLabel} title extraction (Plan A)...`);
+     const titleTagText = document.title;
+     const match = titleTagText.match(regex);
+     if (match && match[1]) {
+         const potentialItemOrArtist = match[1].trim();
+         const potentialArtistStr = !isArtistOnly ? match[2]?.trim() : null; // Artist is group 2 unless it's artist-only search
+
+         if (isArtistOnly) {
+             if (potentialItemOrArtist) {
+                 const processedArtist = processArtistString(potentialItemOrArtist);
+                 if (processedArtist) {
+                     console.log(`TuneTransporter: Extracted ${typeLabel} via Title (Plan A) - Artist: "${processedArtist}"`);
+                     return { item: null, artist: processedArtist };
+                 } else {
+                     console.warn(`TuneTransporter: ${typeLabel} title regex processed to empty artist (Plan A).`);
+                 }
+             } else {
+                 console.warn(`TuneTransporter: ${typeLabel} title regex matched empty potential artist (Plan A).`);
+             }
+         } else { // Track or Album/Single
+             if (potentialItemOrArtist && potentialArtistStr) {
+                 const processedArtist = processArtistString(potentialArtistStr);
+                 if (processedArtist) {
+                     console.log(`TuneTransporter: Extracted ${typeLabel} via Title (Plan A) - Item: "${potentialItemOrArtist}", Artist: "${processedArtist}"`);
+                     return { item: potentialItemOrArtist, artist: processedArtist };
+                 } else {
+                     console.warn(`TuneTransporter: ${typeLabel} title regex processed to empty artist (Plan A).`);
+                 }
+             } else {
+                 console.warn(`TuneTransporter: ${typeLabel} title regex matched empty groups (Plan A).`);
+             }
+         }
+     } else {
+         console.log(`TuneTransporter: ${typeLabel} title regex did not match.`);
+     }
+     return null; // Failed extraction
+ }
+
+ // --- Helper for DOM Extraction --- [KEEP THIS HELPER]
+ function _extractViaDOM(titleSelector, artistSelector, typeLabel, isArtistOnly = false) {
+     console.log(`TuneTransporter: Attempting ${typeLabel} DOM extraction (Plan B)...`);
+     const titleElement = document.querySelector(titleSelector);
+     const artistElement = isArtistOnly ? null : document.querySelector(artistSelector); // Only need title for artist
+
+     if (isArtistOnly) {
+         if (titleElement) {
+             const potentialArtist = titleElement.textContent?.trim();
+             if (potentialArtist) {
+                 const processedArtist = processArtistString(potentialArtist);
+                 if (processedArtist) {
+                     console.log(`TuneTransporter: Extracted ${typeLabel} via DOM (Plan B) - Artist: "${processedArtist}"`);
+                     return { item: null, artist: processedArtist };
+                 } else {
+                     console.warn(`TuneTransporter: ${typeLabel} DOM extraction processed to empty artist (Plan B).`);
+                 }
+             } else {
+                 console.warn(`TuneTransporter: Found ${typeLabel} DOM element but text was empty (Plan B).`);
+             }
+         } else {
+             console.log(`TuneTransporter: Could not find ${typeLabel} DOM element (Plan B).`);
+         }
+     } else { // Track or Album/Single
+         if (titleElement && artistElement) {
+             const potentialItem = titleElement.textContent?.trim();
+             const potentialArtist = artistElement.textContent?.trim();
+             if (potentialItem && potentialArtist) {
+                 const processedArtist = processArtistString(potentialArtist);
+                 if (processedArtist) {
+                     console.log(`TuneTransporter: Extracted ${typeLabel} via DOM (Plan B) - Item: "${potentialItem}", Artist: "${processedArtist}"`);
+                     return { item: potentialItem, artist: processedArtist };
+                 } else {
+                     console.warn(`TuneTransporter: ${typeLabel} DOM extraction processed to empty artist (Plan B).`);
+                 }
+             } else {
+                 console.warn(`TuneTransporter: Found ${typeLabel} DOM elements but text was empty (Plan B).`);
+             }
+         } else {
+             console.log(`TuneTransporter: Could not find ${typeLabel} DOM elements (Plan B).`);
+         }
+     }
+     return null; // Failed extraction
+ }
+
+ /* REMOVE OLD LOGIC BLOCK
+ */
 
  // --- Message Listener for Popup Actions ---
  // --- Helper Functions for Virtual Scrolling ---
 
- // Helper function to pause execution
- function delay(ms) {
-   return new Promise(resolve => setTimeout(resolve, ms));
- }
+ // Helper function to pause execution (Now loaded from utils.js)
+ // function delay(ms) {
+ //   return new Promise(resolve => setTimeout(resolve, ms));
+ // }
 
  // Function to extract info from a single row, using href as ID
  // Assumes processArtistString is available in the global scope (from utils.js)
@@ -380,7 +454,7 @@
     if (title && processedArtist && trackHref) {
         return { id: trackHref, title: title, artist: processedArtist };
     } else {
-        // console.warn(`TuneTransporter: Failed partial extract - Title: ${!!title}, Artist: ${!!processedArtist}, Href: ${!!trackHref}`, rowElement);
+        console.warn(`TuneTransporter: Failed partial extract - Title: ${!!title}, Artist: ${!!processedArtist}, Href: ${!!trackHref}`, rowElement); // Uncommented log
     }
     return null; // Failed to get required info
  }
@@ -532,16 +606,16 @@
          const finalTracks = Array.from(extractedTracks.values()); // Convert Map values to an array
 
          if (finalTracks.length > 0) {
-             const formattedList = finalTracks.map(t => `${t.title} - ${t.artist}`).join('\n');
-             console.log(`TuneTransporter: Sending ${finalTracks.length} tracks and title "${pageTitle}" back to popup after scrolling.`);
+             // Send the array of track objects directly
+             console.log(`TuneTransporter: Sending ${finalTracks.length} track objects and title "${pageTitle}" back to popup after scrolling.`);
              showFeedback(`TuneTransporter: Found ${finalTracks.length} total tracks.`, 2000);
-             // Include pageTitle in the response
-             sendResponse({ success: true, count: finalTracks.length, tracks: formattedList, pageTitle: pageTitle });
+             // Include pageTitle and the array of tracks in the response
+             sendResponse({ success: true, count: finalTracks.length, tracks: finalTracks, pageTitle: pageTitle }); // Send finalTracks array
          } else {
              console.log("TuneTransporter: No tracks found or extracted after scrolling.");
              showFeedback("TuneTransporter: No tracks found after scrolling.", 3000);
              // Include pageTitle even if no tracks found
-             sendResponse({ success: true, count: 0, tracks: null, pageTitle: pageTitle });
+             sendResponse({ success: true, count: 0, tracks: [], pageTitle: pageTitle }); // Send empty array
          }
 
      } catch (error) {
