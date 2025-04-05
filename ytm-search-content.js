@@ -64,12 +64,8 @@ async function processFirstSongResult(targetPlaylistTitle) {
 
        if (!songItemElement) {
            console.error("[YTM Search Content Script] Could not find a suitable song item even after observer.");
-           feedback("Could not find song item on search page. Skipping.", 4000);
-           // Skip to next song logic (needs access to tracks/index) - Refactor needed or pass data
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error finding song item, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
+          feedback("Could not find song item on search page. Skipping.", 4000);
+          recordFailureAndProceed("Could not find song item");
            return;
        }
        console.log("[YTM Search Content Script] Found song item:", songItemElement);
@@ -91,11 +87,8 @@ async function processFirstSongResult(targetPlaylistTitle) {
 
        if (!optionsButton) {
            console.error("[YTM Search Content Script] Could not find options button (three dots) for the song/card.");
-           feedback("Error finding song options. Skipping.", 4000);
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error finding options button, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
+          feedback("Error finding song options. Skipping.", 4000);
+          recordFailureAndProceed("Could not find options button");
            return;
        }
 
@@ -112,11 +105,8 @@ async function processFirstSongResult(targetPlaylistTitle) {
        const menuPopup = await waitForElement(menuPopupSelector, 3000);
        if (!menuPopup) {
            console.error("[YTM Search Content Script] Options menu popup did not appear.");
-           feedback("Error opening song options menu. Skipping.", 4000);
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error opening options menu, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
+          feedback("Error opening song options menu. Skipping.", 4000);
+          recordFailureAndProceed("Options menu did not appear");
            return;
        }
 
@@ -139,11 +129,8 @@ async function processFirstSongResult(targetPlaylistTitle) {
            feedback("Error finding 'Save to playlist' option. Skipping.", 4000);
             // Attempt to close the menu by clicking outside (optional)
            document.body.click();
-            if (typeof delay === 'function') await delay(200);
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error finding save link, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
+           if (typeof delay === 'function') await delay(200);
+          recordFailureAndProceed("Save to playlist link not found");
            return;
        }
 
@@ -159,12 +146,9 @@ async function processFirstSongResult(targetPlaylistTitle) {
        const dialogElement = await waitForElement(dialogSelector, 10000); // Increased timeout to 10 seconds
        if (!dialogElement) {
            console.error("[YTM Search Content Script] 'Save to playlist' dialog did not appear.");
-           feedback("Error opening 'Save to playlist' dialog. Skipping.", 4000);
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error opening save dialog, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
-           return;
+          feedback("Error opening 'Save to playlist' dialog. Skipping.", 4000);
+          recordFailureAndProceed("Save to playlist dialog did not appear");
+          return; // Still need to return here to exit processFirstSongResult
        }
 
        console.log("[YTM Search Content Script] 'Save to playlist' dialog appeared.");
@@ -186,12 +170,9 @@ async function processFirstSongResult(targetPlaylistTitle) {
            // Attempt to close dialog
            const closeButton = dialogElement.querySelector('yt-button-shape[aria-label="Dismiss"] button');
            if (closeButton) closeButton.click();
-           if (typeof delay === 'function') await delay(200);
-           // Disable image blocking before navigating on error
-           console.log("[YTM Search Content Script] Error finding target playlist, sending message to disable image blocking.");
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           goToLibraryForNextSong();
-           return;
+          if (typeof delay === 'function') await delay(200);
+          recordFailureAndProceed(`Playlist '${targetPlaylistTitle}' not found in dialog`);
+          return; // Still need to return here to exit processFirstSongResult
        }
 
        console.log(`[YTM Search Content Script] Found target playlist element. Clicking:`, targetPlaylistElement);
@@ -206,25 +187,53 @@ async function processFirstSongResult(targetPlaylistTitle) {
 
    } catch (error) {
        console.error("[YTM Search Content Script] Error in processFirstSongResult:", error);
-       feedback(`Error processing song: ${error.message}. Skipping.`, 5000);
-       // Disable image blocking before navigating on error
-       console.log("[YTM Search Content Script] Error during song processing, sending message to disable image blocking.");
-       chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-       goToLibraryForNextSong();
+      feedback(`Error processing song: ${error.message}. Skipping.`, 5000);
+      recordFailureAndProceed(`Error in processFirstSongResult: ${error.message}`);
    }
 }
 
-// --- Helper Functions for Navigation/Next Step ---
+// --- Helper Functions ---
 
-function goToLibraryForNextSong() { // Removed delay parameter and async
-   console.log("[YTM Search Content Script] Navigating back to library to try next song or on error.");
-   sessionStorage.removeItem(NEXT_STEP_FLAG); // Clear step flag before navigating
-   sessionStorage.removeItem(CURRENT_TRACK_KEY); // Clear current track data
-   // Keep PROCESSING_FLAG and TARGET_TITLE_KEY
-   // No delay needed anymore
-   window.location.href = `https://music.youtube.com/library/playlists`;
+function recordFailureAndProceed(reason) {
+   console.warn(`[YTM Search Content Script] Recording failure: ${reason}`);
+   try {
+       const tracksJson = sessionStorage.getItem(TRACKS_KEY);
+       const currentTrackIndexStr = sessionStorage.getItem(CURRENT_TRACK_KEY);
+       const failedTracksJson = sessionStorage.getItem('tuneTransporterFailedTracks');
+
+       if (tracksJson && currentTrackIndexStr !== null && failedTracksJson) {
+           const tracks = JSON.parse(tracksJson);
+           const currentTrackIndex = parseInt(currentTrackIndexStr, 10);
+           let failedTracks = JSON.parse(failedTracksJson);
+
+           if (currentTrackIndex >= 0 && currentTrackIndex < tracks.length) {
+               const failedTrack = tracks[currentTrackIndex];
+               // Avoid adding duplicates if retry happens
+               if (!failedTracks.some(t => t.title === failedTrack.title && t.artist === failedTrack.artist)) {
+                   failedTracks.push({
+                       title: failedTrack.title,
+                       artist: failedTrack.artist,
+                       reason: reason
+                   });
+                   sessionStorage.setItem('tuneTransporterFailedTracks', JSON.stringify(failedTracks));
+                   console.log(`[YTM Search Content Script] Recorded failure for: ${failedTrack.title}`);
+               } else {
+                    console.log(`[YTM Search Content Script] Failure already recorded for: ${failedTrack.title}`);
+               }
+           } else {
+                console.error("[YTM Search Content Script] Invalid current track index found while recording failure.");
+           }
+       } else {
+            console.error("[YTM Search Content Script] Could not retrieve necessary data to record failure.");
+       }
+   } catch (e) {
+       console.error("[YTM Search Content Script] Error processing data for failure recording:", e);
+   }
+   // Always proceed to the next song attempt
+   proceedToNextSongOrFinish();
 }
 
+// Removed goToLibraryForNextSong function
 function proceedToNextSongOrFinish() {
    const tracksJson = sessionStorage.getItem(TRACKS_KEY);
    const currentTrackIndexStr = sessionStorage.getItem(CURRENT_TRACK_KEY);
@@ -269,23 +278,54 @@ console.log(`[YTM Search Content Script] Navigating to search URL for next song:
 window.location.href = nextSearchUrl;
 
        } else {
-           // --- All songs processed ---
-           console.log("[YTM Search Content Script] All songs processed successfully!");
-           feedback("Finished adding all songs to playlist!", 5000);
-           sessionStorage.removeItem(PROCESSING_FLAG);
-           sessionStorage.removeItem(NEXT_STEP_FLAG);
-           sessionStorage.removeItem(CURRENT_TRACK_KEY);
-           sessionStorage.removeItem(TARGET_TITLE_KEY);
-           sessionStorage.removeItem(TRACKS_KEY);
-           console.log("[YTM Search Content Script] Cleared flags. Sending message to disable image blocking.");
-           // Disable image blocking on successful completion
-           chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-           console.log("[YTM Search Content Script] Navigating back to library.");
-           // Use await delay here if needed, but it's inside a non-async function now
-           setTimeout(() => {
-                window.location.href = `https://music.youtube.com/library/playlists`;
-           }, 500); // Brief pause before navigating
-       }
+          // --- All songs attempted ---
+          console.log("[YTM Search Content Script] All songs attempted.");
+
+          // Log failed tracks summary
+          const failedTracksJson = sessionStorage.getItem('tuneTransporterFailedTracks');
+          let failedTracks = [];
+          if (failedTracksJson) {
+              try {
+                  failedTracks = JSON.parse(failedTracksJson);
+              } catch (e) {
+                  console.error("Error parsing failed tracks list:", e);
+              }
+          }
+
+          if (failedTracks.length > 0) {
+              console.warn("------------------------------------------");
+              console.warn(`TuneTransporter: Failed to add ${failedTracks.length} song(s):`);
+              failedTracks.forEach((track, index) => {
+                  console.warn(`${index + 1}. ${track.artist} - ${track.title} (Reason: ${track.reason})`);
+              });
+              console.warn("------------------------------------------");
+              const summaryMessage = `Finished! Failed to add ${failedTracks.length} song(s). Check console (F12) on this page for details before navigating back.`;
+              feedback(summaryMessage, 8000); // Show feedback on search page
+              sessionStorage.setItem('tuneTransporterFailureSummary', summaryMessage); // Store for library page
+          } else {
+              feedback("Finished adding all songs successfully!", 5000);
+              // Optionally store a success message if needed on the library page
+              // sessionStorage.setItem('tuneTransporterFailureSummary', 'Finished adding all songs successfully!');
+          }
+
+          // Disable image blocking
+          console.log("[YTM Search Content Script] Finished processing, sending message to disable image blocking.");
+          chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+
+          // Clear all session storage items
+          sessionStorage.removeItem(PROCESSING_FLAG);
+          sessionStorage.removeItem(NEXT_STEP_FLAG);
+          sessionStorage.removeItem(CURRENT_TRACK_KEY);
+          sessionStorage.removeItem(TARGET_TITLE_KEY);
+          sessionStorage.removeItem(TRACKS_KEY);
+          sessionStorage.removeItem('tuneTransporterFailedTracks'); // Clear failed list too
+          console.log("[YTM Search Content Script] Cleared flags. Navigating back to library.");
+
+          // Navigate back
+          setTimeout(() => {
+               window.location.href = `https://music.youtube.com/library/playlists`;
+          }, 500); // Brief pause before navigating
+      }
    } catch (error) {
         console.error("[YTM Search Content Script] Error in proceedToNextSongOrFinish:", error);
         feedback(`Error preparing next song: ${error.message}. Finishing.`, 5000);
@@ -294,10 +334,8 @@ window.location.href = nextSearchUrl;
         sessionStorage.removeItem(CURRENT_TRACK_KEY);
         sessionStorage.removeItem(TARGET_TITLE_KEY);
         sessionStorage.removeItem(TRACKS_KEY);
-        // Disable image blocking before navigating on error
-        console.log("[YTM Search Content Script] Error preparing next song, sending message to disable image blocking.");
-        chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-        window.location.href = `https://music.youtube.com/library/playlists`; // Go back on error
+       // Record failure for the song that was *supposed* to be next
+       recordFailureAndProceed(`Error in proceedToNextSongOrFinish: ${error.message}`);
    }
 }
 
@@ -401,9 +439,9 @@ async function handleSearchPage() {
            observerTimeout = setTimeout(() => {
                console.error(`[YTM Search Content Script] Observer timed out after ${OBSERVER_TIMEOUT_MS}ms. Results not detected.`);
                if(observer) observer.disconnect(); // Ensure observer is disconnected
-               feedback("Search results did not load in time. Skipping song.", 5000);
-               goToLibraryForNextSong(); // Skip this song
-           }, OBSERVER_TIMEOUT_MS);
+              feedback("Search results did not load in time. Skipping song.", 5000);
+              recordFailureAndProceed("Observer timed out waiting for results");
+          }, OBSERVER_TIMEOUT_MS);
 
            // The rest of the logic is now inside processFirstSongResult or helper functions
 
@@ -421,10 +459,12 @@ async function handleSearchPage() {
             sessionStorage.removeItem(TARGET_TITLE_KEY);
             sessionStorage.removeItem(TRACKS_KEY); // Clear remaining tracks too on error
             console.log("[YTM Search Content Script] Cleared flags due to error. Navigating back to library.");
-            // Disable image blocking before navigating on error
-            console.log("[YTM Search Content Script] Error in handleSearchPage, sending message to disable image blocking.");
-            chrome.runtime.sendMessage({ action: "disableImageBlocking" });
-            window.location.href = `https://music.youtube.com/library/playlists`;
+           // Attempt to record failure for the current track if possible, then navigate
+           recordFailureAndProceed(`Error in handleSearchPage: ${error.message}`);
+           // Note: recordFailureAndProceed calls proceedToNextSongOrFinish, which will navigate if needed.
+           // We might end up navigating twice here if proceedToNextSongOrFinish also fails, but it's safer.
+           // If proceedToNextSongOrFinish succeeds in navigating, the second navigation won't happen.
+           // If it fails to get data, it will navigate to library.
        } catch (cleanupError) {
             console.error("[YTM Search Content Script] Error during cleanup navigation:", cleanupError);
        }

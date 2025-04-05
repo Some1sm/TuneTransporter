@@ -57,6 +57,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => { 
                                  sessionStorage.setItem(TRACKS_KEY, JSON.stringify(tracks)); // Store full list
                                  sessionStorage.setItem(TARGET_TITLE_KEY, createdTitle);
                                  sessionStorage.setItem(CURRENT_TRACK_KEY, '0'); // Start at index 0
+                                 sessionStorage.setItem('tuneTransporterFailedTracks', JSON.stringify([])); // Initialize empty failed list
                                  sessionStorage.setItem(PROCESSING_FLAG, 'true');
                                  sessionStorage.setItem(NEXT_STEP_FLAG, 'findSongOnSearchPage');
 
@@ -103,6 +104,35 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => { 
     return false; // Indicate message not handled
 }); // Keep listener end
 
-// Removed 'load' event listener - library page no longer initiates subsequent searches
+// --- Check for Completion Summary on Load ---
+window.addEventListener('load', () => {
+   // Use a short delay to ensure the page is stable
+   setTimeout(() => {
+       const summaryMessage = sessionStorage.getItem('tuneTransporterFailureSummary');
+       if (summaryMessage) {
+           console.log("[YTM Library Content Script] Found completion summary message:", summaryMessage);
+           feedback(summaryMessage, 10000); // Show for 10 seconds
+           sessionStorage.removeItem('tuneTransporterFailureSummary'); // Remove after displaying
+       } else {
+           // console.log("[YTM Library Content Script] No completion summary message found on load.");
+       }
 
-console.log("[YTM Library Content Script] Listener added.");
+       // Also ensure image blocking is disabled if the process was somehow interrupted
+       // and the flag wasn't cleared properly before navigating back.
+       // Check if processing flag *still* exists (it shouldn't if process finished cleanly)
+       if (sessionStorage.getItem(PROCESSING_FLAG)) {
+            console.warn("[YTM Library Content Script] Found lingering processing flag on library load. Disabling image blocking as a precaution.");
+            chrome.runtime.sendMessage({ action: "disableImageBlocking" });
+            // Optionally clear other flags too
+            sessionStorage.removeItem(PROCESSING_FLAG);
+            sessionStorage.removeItem(NEXT_STEP_FLAG);
+            sessionStorage.removeItem(CURRENT_TRACK_KEY);
+            sessionStorage.removeItem(TARGET_TITLE_KEY);
+            sessionStorage.removeItem(TRACKS_KEY);
+            sessionStorage.removeItem('tuneTransporterFailedTracks');
+       }
+
+   }, 500); // Delay slightly
+});
+
+console.log("[YTM Library Content Script] Listener and load handler added.");
