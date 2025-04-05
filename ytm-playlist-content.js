@@ -1,9 +1,9 @@
 // TuneTransporter/ytm-playlist-content.js
 
-// Helper function to pause execution
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+// Helper function to pause execution (Now loaded from utils.js)
+// function delay(ms) {
+//   return new Promise(resolve => setTimeout(resolve, ms));
+// }
 
 // --- UPDATED Function to extract info from a single YTM row ---
 // Targets specific column structure based on provided HTML
@@ -62,7 +62,7 @@ function extractYtmTrackInfoFromRow(rowElement, albumArtistFromHeader) {
 async function scrollAndExtractAllYtmTracks() {
     const feedback = typeof showFeedback === 'function' ? showFeedback : (msg) => console.log(msg);
     feedback("TuneTransporter: Starting YTM content extraction...", 2000);
-    console.log("TuneTransporter: Starting YTM content extraction...");
+    // console.log("TuneTransporter: Starting YTM content extraction..."); // Removed debug log
 
     // --- Extract Page Title (Playlist or Album) ---
     let pageTitle = 'Unknown Title';
@@ -75,7 +75,7 @@ async function scrollAndExtractAllYtmTracks() {
             pageTitle = pageTitleElement.textContent?.trim() || pageTitle;
         }
     }
-    console.log(`TuneTransporter: Found page title: "${pageTitle}"`);
+    // console.log(`TuneTransporter: Found page title: "${pageTitle}"`); // Removed debug log
 
     // --- Extract Album Artist (if applicable) ---
     let albumArtist = null; // Keep this variable name for clarity
@@ -93,14 +93,14 @@ async function scrollAndExtractAllYtmTracks() {
                 potentialArtist = processArtistString(potentialArtist);
             }
             if (potentialArtist) {
-               albumArtist = potentialArtist; // Assign to albumArtist
-               console.log(`TuneTransporter: Found Album Artist in header: "${albumArtist}"`);
+              albumArtist = potentialArtist; // Assign to albumArtist
+              // console.log(`TuneTransporter: Found Album Artist in header: "${albumArtist}"`); // Removed debug log
                break;
             }
         }
     }
-    if (!albumArtist) {
-        console.log("TuneTransporter: Album Artist not found in header (might be a playlist or compilation).");
+    if (!albumArtist) { // Keep check
+        // console.log("TuneTransporter: Album Artist not found in header (might be a playlist or compilation)."); // Removed debug log
     }
     // --- End Artist Extraction ---
 
@@ -116,12 +116,12 @@ async function scrollAndExtractAllYtmTracks() {
         containerType = 'Album';
     }
 
-    if (!listContainer) {
-        console.error(`TuneTransporter ERROR: Could not find playlist or album container. Stopping extraction.`);
+    if (!listContainer) { // Keep check
+        console.error(`ERROR: Could not find playlist or album container. Stopping extraction.`); // Keep error log
         feedback(`TuneTransporter Error: Content container not found. Cannot extract.`, 5000);
         return { title: pageTitle, tracks: [] }; // Return title even on error
     }
-    console.log(`TuneTransporter: Found content container using ${containerType} selector.`);
+    // console.log(`TuneTransporter: Found content container using ${containerType} selector.`); // Removed debug log
     // --- End Container Determination ---
 
   const scrollTarget = window;
@@ -134,7 +134,7 @@ async function scrollAndExtractAllYtmTracks() {
   const maxIterations = 250;
   let iterations = 0;
 
-  console.log("TuneTransporter: Starting YTM scroll extraction loop...");
+  // console.log("TuneTransporter: Starting YTM scroll extraction loop..."); // Removed debug log
 
   while (stableScrollCount < maxStableScrolls && iterations < maxIterations) {
     iterations++;
@@ -158,7 +158,7 @@ async function scrollAndExtractAllYtmTracks() {
       // Warning for missing artist is now handled inside extractYtmTrackInfoFromRow
     });
 
-    console.log(`TuneTransporter Iteration ${iterations}: Found ${currentIterationFoundCount} new tracks. Total: ${extractedTracks.length}`);
+    // console.log(`TuneTransporter Iteration ${iterations}: Found ${currentIterationFoundCount} new tracks. Total: ${extractedTracks.length}`); // Removed debug log
     feedback(`TuneTransporter: Found ${extractedTracks.length} total tracks...`, 1000);
 
     const currentScrollHeight = document.documentElement.scrollHeight;
@@ -173,8 +173,8 @@ async function scrollAndExtractAllYtmTracks() {
     }
     lastScrollHeight = newScrollHeight;
 
-     if (stableScrollCount >= maxStableScrolls) {
-        console.log("TuneTransporter: Scroll height stable. Performing final check...");
+    if (stableScrollCount >= maxStableScrolls) { // Keep check
+        // console.log("TuneTransporter: Scroll height stable. Performing final check..."); // Removed debug log
         feedback("TuneTransporter: Reached end of list, final check...", 1500);
         await delay(scrollDelayMs); // Wait a bit more
         let finalFoundCount = 0;
@@ -187,18 +187,18 @@ async function scrollAndExtractAllYtmTracks() {
                extractedTracks.push(trackInfo);
                finalFoundCount++;
            }
-        });
-        console.log(`TuneTransporter: Final check added ${finalFoundCount} more tracks.`);
+        }); // Keep loop end
+        // console.log(`TuneTransporter: Final check added ${finalFoundCount} more tracks.`); // Removed debug log
         break; // Exit loop
     }
   } // End while loop
 
-  if (iterations >= maxIterations) {
-      console.warn(`TuneTransporter: Reached max scroll iterations (${maxIterations}).`);
+  if (iterations >= maxIterations) { // Keep check
+      console.warn(`Reached max scroll iterations (${maxIterations}).`); // Keep warning log
       feedback("TuneTransporter Warning: Reached max scroll iterations.", 4000);
   }
 
-  console.log(`TuneTransporter: Finished YTM extraction. Total tracks found: ${extractedTracks.length}.`);
+  // console.log(`TuneTransporter: Finished YTM extraction. Total tracks found: ${extractedTracks.length}.`); // Removed debug log
   feedback(`TuneTransporter: Finished extraction. Found ${extractedTracks.length} total tracks.`, 3000);
   return { title: pageTitle, tracks: extractedTracks };
 }
@@ -216,12 +216,16 @@ async function createYtmPlaylist(playlistTitle) {
     const creationConfirmDelayMs = 2000;
 
     feedback(`TuneTransporter: Attempting to create playlist "${playlistTitle}"...`, 2000);
-    console.log(`TuneTransporter: Attempting to create playlist "${playlistTitle}"...`);
+    // console.log(`TuneTransporter: Attempting to create playlist "${playlistTitle}"...`); // Removed debug log
 
     try {
+        // Add a delay before interacting with the DOM, especially when called automatically
+        // console.log("[YTM Playlist Content] Adding delay before starting creation steps..."); // Removed debug log
+        await delay(500); // 500ms delay - adjust if needed
+
         const newPlaylistButton = document.querySelector(newPlaylistButtonSelector);
         if (!newPlaylistButton) {
-            console.error("TuneTransporter ERROR: 'New playlist' button not found. Ensure you are on the Library > Playlists page.");
+            console.error("ERROR: 'New playlist' button not found. Ensure you are on the Library > Playlists page."); // Keep error log
             feedback("TuneTransporter Error: 'New playlist' button not found. Go to Library > Playlists.", 6000);
             return { success: false, error: "Button not found", playlistTitle: null };
         }
@@ -230,14 +234,14 @@ async function createYtmPlaylist(playlistTitle) {
 
         const dialogElement = document.querySelector(dialogSelector);
         if (!dialogElement) {
-            console.error("TuneTransporter ERROR: Playlist creation dialog did not appear.");
+            console.error("ERROR: Playlist creation dialog did not appear."); // Keep error log
             feedback("TuneTransporter Error: Playlist creation dialog not found.", 5000);
             return { success: false, error: "Dialog not found", playlistTitle: null };
         }
 
         const titleInput = dialogElement.querySelector(titleInputSelector);
         if (!titleInput) {
-            console.error("TuneTransporter ERROR: Title input field not found in dialog.");
+            console.error("ERROR: Title input field not found in dialog."); // Keep error log
             feedback("TuneTransporter Error: Title input not found.", 5000);
             return { success: false, error: "Title input not found", playlistTitle: null };
         }
@@ -248,12 +252,12 @@ async function createYtmPlaylist(playlistTitle) {
 
         const createButton = dialogElement.querySelector(createButtonSelector);
         if (!createButton) {
-            console.error("TuneTransporter ERROR: 'Create' button not found in dialog.");
+            console.error("ERROR: 'Create' button not found in dialog."); // Keep error log
             feedback("TuneTransporter Error: 'Create' button not found.", 5000);
             return { success: false, error: "'Create' button not found", playlistTitle: null };
         }
         if (createButton.disabled || createButton.hasAttribute('aria-disabled') && createButton.getAttribute('aria-disabled') !== 'false') {
-             console.error("TuneTransporter ERROR: 'Create' button is disabled.");
+            console.error("ERROR: 'Create' button is disabled."); // Keep error log
              feedback("TuneTransporter Error: 'Create' button is disabled.", 5000);
              return { success: false, error: "'Create' button disabled", playlistTitle: null };
         }
@@ -261,11 +265,13 @@ async function createYtmPlaylist(playlistTitle) {
         createButton.click();
         await delay(creationConfirmDelayMs);
 
-        console.log(`TuneTransporter: Playlist "${playlistTitle}" likely created.`);
-        return { success: true, playlistTitle: playlistTitle };
+        // console.log(`TuneTransporter: Playlist "${playlistTitle}" likely created. Getting URL...`); // Removed debug log
+        const newPlaylistUrl = window.location.href; // Get the URL after creation/navigation
+        // console.log(`TuneTransporter: New playlist URL: ${newPlaylistUrl}`); // Removed debug log
+        return { success: true, playlistTitle: playlistTitle, playlistUrl: newPlaylistUrl };
 
     } catch (error) {
-        console.error("TuneTransporter ERROR: An unexpected error occurred during playlist creation:", error);
+        console.error("ERROR: An unexpected error occurred during playlist creation:", error); // Keep error log
         feedback("TuneTransporter Error: Unexpected error during creation.", 5000);
         return { success: false, error: error.message, playlistTitle: null };
     }
@@ -278,18 +284,21 @@ async function addSongToPlaylist(songTitle, songArtist, targetPlaylistTitle) {
     const navigationDelayMs = 4000;
     const dialogWaitMs = 1500;
 
-    feedback(`Adding "${songTitle}" by ${songArtist || 'Unknown Artist'} to "${targetPlaylistTitle}"...`);
-    console.log(`TuneTransporter: Adding "${songTitle}" by ${songArtist || 'Unknown Artist'}" to playlist "${targetPlaylistTitle}"`);
+    feedback(`Adding "${songTitle}" by ${songArtist || 'Unknown Artist'} to "${targetPlaylistTitle}"...`, actionDelayMs + navigationDelayMs + dialogWaitMs + 500); // Extend feedback duration
+    // console.log(`[addSongToPlaylist] START: Adding "${songTitle}" by ${songArtist || 'Unknown Artist'}" to playlist "${targetPlaylistTitle}"`); // Removed debug log
 
     try {
+        // console.log("[addSongToPlaylist] Step 1: Search"); // Removed debug log
         // 1. Search
         const query = `${songTitle} ${songArtist || ''}`.trim(); // Handle potentially null artist
         const searchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
-        console.log(`TuneTransporter: Navigating to search URL: ${searchUrl}`);
+        // console.log(`[addSongToPlaylist] Navigating to search URL: ${searchUrl}`); // Removed debug log
         window.location.href = searchUrl;
+        // console.log("[addSongToPlaylist] Waiting for navigation after search..."); // Removed debug log
         await delay(navigationDelayMs);
+        // console.log("[addSongToPlaylist] Navigation delay complete."); // Removed debug log
 
-        // 2. Find Result Link
+        // console.log("[addSongToPlaylist] Step 2: Find Result Link"); // Removed debug log
         const songShelfSelector = 'ytmusic-shelf-renderer[page-type="MUSIC_PAGE_TYPE_SEARCH"]';
         const songResultSelector = `${songShelfSelector} div#contents ytmusic-responsive-list-item-renderer a[href*="watch?v="]`;
         const topResultSongLinkSelector = 'ytmusic-card-shelf-renderer[header="Top result"] a[href*="watch?v="]';
@@ -300,34 +309,41 @@ async function addSongToPlaylist(songTitle, songArtist, targetPlaylistTitle) {
         if (!songLinkElement) songLinkElement = document.querySelector(videoResultSelector);
 
         if (!songLinkElement) {
-             console.error(`TuneTransporter ERROR: No suitable song/video link found for "${query}".`);
+            console.error(`ERROR: No suitable song/video link found for "${query}".`); // Keep error log
              feedback(`Error: Song/Video "${songTitle}" not found. Skipping.`, 5000);
-             return false;
+             return false; // Indicate failure for this song
         }
+        // console.log("[addSongToPlaylist] Found song link element:", songLinkElement); // Removed debug log
         songLinkElement.click();
+        // console.log("[addSongToPlaylist] Clicked song link. Waiting for navigation..."); // Removed debug log
         await delay(navigationDelayMs);
+        // console.log("[addSongToPlaylist] Navigation delay complete."); // Removed debug log
 
-        // 3. Open Menu
+        // console.log("[addSongToPlaylist] Step 3: Open Menu"); // Removed debug log
         const menuButtonSelector = '#menu > ytmusic-menu-renderer > yt-icon-button';
         const menuButton = document.querySelector(menuButtonSelector);
         if (!menuButton) {
-            console.error("TuneTransporter ERROR: Song menu button not found on watch page.");
+            console.error("ERROR: Song menu button not found on watch page."); // Keep error log
             feedback(`Error: Menu button not found for "${songTitle}". Skipping.`, 5000);
-            return false;
+            return false; // Indicate failure
         }
+        // console.log("[addSongToPlaylist] Found menu button:", menuButton); // Removed debug log
         menuButton.click();
+        // console.log("[addSongToPlaylist] Clicked menu button. Waiting for dropdown..."); // Removed debug log
         await delay(dialogWaitMs);
+        // console.log("[addSongToPlaylist] Menu dropdown delay complete."); // Removed debug log
 
-        // 4. Click "Save to playlist"
+        // console.log("[addSongToPlaylist] Step 4: Click 'Save to playlist'"); // Removed debug log
         const menuDropdownSelector = 'tp-yt-iron-dropdown';
         const saveToPlaylistItemText = "Save to playlist";
         const menuItemsSelector = `${menuDropdownSelector} ytmusic-menu-navigation-item-renderer, ${menuDropdownSelector} ytmusic-menu-service-item-renderer`;
         const menuDropdown = document.querySelector(menuDropdownSelector);
         if (!menuDropdown) {
-             console.error("TuneTransporter ERROR: Menu dropdown did not appear.");
+            console.error("ERROR: Menu dropdown did not appear."); // Keep error log
              feedback(`Error: Song menu did not open for "${songTitle}". Skipping.`, 5000);
-             return false;
+             return false; // Indicate failure
         }
+        // console.log("[addSongToPlaylist] Found menu dropdown. Searching for 'Save to playlist' item..."); // Removed debug log
         let saveToPlaylistButton = null;
         menuDropdown.querySelectorAll(menuItemsSelector).forEach(item => {
             const textElement = item.querySelector('yt-formatted-string.text');
@@ -336,14 +352,17 @@ async function addSongToPlaylist(songTitle, songArtist, targetPlaylistTitle) {
             }
         });
         if (!saveToPlaylistButton) {
-            console.error(`TuneTransporter ERROR: "${saveToPlaylistItemText}" button not found in menu.`);
+            console.error(`ERROR: "${saveToPlaylistItemText}" button not found in menu.`); // Keep error log
             feedback(`Error: "${saveToPlaylistItemText}" not found for "${songTitle}". Skipping.`, 5000);
-            return false;
+            return false; // Indicate failure
         }
+        // console.log("[addSongToPlaylist] Found 'Save to playlist' button:", saveToPlaylistButton); // Removed debug log
         saveToPlaylistButton.click();
+        // console.log("[addSongToPlaylist] Clicked 'Save to playlist'. Waiting for dialog..."); // Removed debug log
         await delay(dialogWaitMs);
+        // console.log("[addSongToPlaylist] Save dialog delay complete."); // Removed debug log
 
-        // 5. Select Target Playlist
+        // console.log("[addSongToPlaylist] Step 5: Select Target Playlist"); // Removed debug log
         const dialogSelector = 'tp-yt-paper-dialog ytmusic-add-to-playlist-renderer';
         const playlistListSelector = `${dialogSelector} #playlists`;
         const playlistItemSelector = `ytmusic-playlist-add-to-option-renderer`;
@@ -351,16 +370,18 @@ async function addSongToPlaylist(songTitle, songArtist, targetPlaylistTitle) {
 
         const addToPlaylistDialog = document.querySelector(dialogSelector);
         if (!addToPlaylistDialog) {
-            console.error("TuneTransporter ERROR: 'Save to playlist' dialog did not appear.");
+            console.error("ERROR: 'Save to playlist' dialog did not appear."); // Keep error log
             feedback(`Error: 'Save to playlist' dialog did not open for "${songTitle}". Skipping.`, 5000);
-            return false;
+            return false; // Indicate failure
         }
+        // console.log("[addSongToPlaylist] Found 'Save to playlist' dialog."); // Removed debug log
         const playlistList = addToPlaylistDialog.querySelector(playlistListSelector);
         if (!playlistList) {
-             console.error("TuneTransporter ERROR: Playlist list container not found in dialog.");
+            console.error("ERROR: Playlist list container not found in dialog."); // Keep error log
              feedback(`Error: Playlist list not found for "${songTitle}". Skipping.`, 5000);
-             return false;
+             return false; // Indicate failure
         }
+        // console.log("[addSongToPlaylist] Found playlist list container. Searching for target playlist..."); // Removed debug log
         let targetPlaylistElement = null;
         playlistList.querySelectorAll(playlistItemSelector).forEach(item => {
             const titleElement = item.querySelector(playlistTitleSelector);
@@ -370,22 +391,23 @@ async function addSongToPlaylist(songTitle, songArtist, targetPlaylistTitle) {
             }
         });
         if (!targetPlaylistElement) {
-            console.error(`TuneTransporter ERROR: Playlist "${targetPlaylistTitle}" not found in the dialog list.`);
+            console.error(`ERROR: Playlist "${targetPlaylistTitle}" not found in the dialog list.`); // Keep error log
             feedback(`Error: Playlist "${targetPlaylistTitle}" not found. Skipping.`, 5000);
-            const closeButton = addToPlaylistDialog.querySelector('yt-button-shape.close-icon button');
+            const closeButton = addToPlaylistDialog.querySelector('yt-button-shape.close-icon button'); // Try to close dialog
             closeButton?.click();
             await delay(actionDelayMs);
-            return false;
+            return false; // Indicate failure
         }
+        // console.log(`[addSongToPlaylist] Found target playlist "${targetPlaylistTitle}". Clicking...`); // Removed debug log
         targetPlaylistElement.click();
-        await delay(actionDelayMs);
+        await delay(actionDelayMs); // Wait for add confirmation/dialog close
 
         feedback(`Successfully added "${songTitle}" to "${targetPlaylistTitle}".`, 2000);
-        console.log(`TuneTransporter: Successfully added "${songTitle}" to "${targetPlaylistTitle}".`);
-        return true;
+        // console.log(`[addSongToPlaylist] END: Successfully added "${songTitle}" to "${targetPlaylistTitle}".`); // Removed debug log
+        return true; // Indicate success
 
     } catch (error) {
-        console.error(`TuneTransporter ERROR: An unexpected error occurred while adding "${songTitle}":`, error);
+        console.error(`ERROR: An unexpected error occurred while adding "${songTitle}":`, error); // Keep error log
         feedback(`Error adding "${songTitle}": ${error.message}`, 5000);
         return false;
     }
@@ -398,10 +420,11 @@ async function processPlaylist(playlistTitle, tracksToAdd, targetPlaylistTitle) 
 
     if (!tracksToAdd || tracksToAdd.length === 0) {
         feedback("TuneTransporter: No tracks provided to add.", 5000);
-        console.log("TuneTransporter: No tracks received. Exiting.");
+        // console.log("TuneTransporter: No tracks received. Exiting."); // Removed debug log
         return { success: false, added: 0, failed: 0, total: 0 };
     }
 
+    // console.log(`[processPlaylist] START: Processing ${tracksToAdd.length} tracks for playlist "${targetPlaylistTitle}" (Original title: "${playlistTitle}")`); // Removed debug log
     feedback(`TuneTransporter: Processing ${tracksToAdd.length} tracks for "${targetPlaylistTitle}"...`, 3000);
 
     // Playlist should already be created by this point if needed.
@@ -418,7 +441,7 @@ async function processPlaylist(playlistTitle, tracksToAdd, targetPlaylistTitle) 
         }
 
         feedback(`Adding song ${i + 1}/${tracksToAdd.length}: "${track.title}"...`, songAddDelayMs + 500);
-        console.log(`\n--- Adding Song ${i + 1}/${tracksToAdd.length}: "${track.title}" by ${track.artist || 'Unknown Artist'} ---`);
+        // console.log(`\n[processPlaylist] --- Adding Song ${i + 1}/${tracksToAdd.length}: "${track.title}" by ${track.artist || 'Unknown Artist'} ---`); // Removed debug log
 
         // Pass the target playlist title explicitly
         const success = await addSongToPlaylist(track.title, track.artist, targetPlaylistTitle);
@@ -427,18 +450,23 @@ async function processPlaylist(playlistTitle, tracksToAdd, targetPlaylistTitle) 
             addedCount++;
         } else {
             failedCount++;
+            console.warn(`Failed to add "${track.title}".`); // Keep warning log
             feedback(`Failed to add "${track.title}". Check console for details.`, 4000);
         }
-        // Delays are handled within addSongToPlaylist
+        // console.log(`[processPlaylist] Finished attempt for song ${i + 1}. Waiting before next...`); // Removed debug log
+        // Add delay between song additions *here* as well, after navigation back from watch page
+        await delay(songAddDelayMs);
     }
 
     // Final Feedback
-    console.log("\n--- TuneTransporter: Finished Adding Songs ---");
-    console.log(`Playlist: ${targetPlaylistTitle}`);
-    console.log(`Total Tracks Attempted: ${tracksToAdd.length}`);
-    console.log(`Successfully Added: ${addedCount}`);
-    console.log(`Failed: ${failedCount}`);
+    // console.log(`\n[processPlaylist] END: Finished processing all tracks for "${targetPlaylistTitle}".`); // Removed debug log
+    // console.log(`Playlist: ${targetPlaylistTitle}`); // Removed debug log
+    // console.log(`Total Tracks Attempted: ${tracksToAdd.length}`); // Removed debug log
+    // console.log(`Successfully Added: ${addedCount}`); // Removed debug log
+    // console.log(`Failed: ${failedCount}`); // Removed debug log
     feedback(`Finished! Added ${addedCount}/${tracksToAdd.length} songs to "${targetPlaylistTitle}". ${failedCount > 0 ? `(${failedCount} failed)` : ''}`, 10000);
+
+    // Flag removal is now handled by ytm-library-content.js when the queue is empty
 
     return { success: true, added: addedCount, failed: failedCount, total: tracksToAdd.length };
 }
@@ -451,7 +479,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const storageKeyTracks = 'spotifyTracks';
 
     if (message.action === "processYtmPlaylist") {
-        console.log("TuneTransporter (YTM): Received message:", message);
+        // console.log("TuneTransporter (YTM): Received message:", message); // Removed debug log
         const source = message.source || 'ytm'; // Default to 'ytm' if source not provided
 
         (async () => { // Wrap async logic in an IIFE
@@ -463,7 +491,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             try {
                 if (source === 'spotify') {
                     feedback("TuneTransporter (YTM): Processing playlist from Spotify data...", 2000);
-                    console.log("TuneTransporter (YTM): Retrieving data from storage...");
+                    // console.log("TuneTransporter (YTM): Retrieving data from storage..."); // Removed debug log
 
                     // Retrieve data from storage
                     const result = await new Promise((resolve, reject) => {
@@ -482,7 +510,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     if (!playlistTitle || !tracksToAdd || tracksToAdd.length === 0) {
                         throw new Error("Playlist title or tracks not found in storage.");
                     }
-                    console.log(`TuneTransporter: Retrieved ${tracksToAdd.length} tracks for playlist "${playlistTitle}" from storage.`);
+                    // console.log(`TuneTransporter: Retrieved ${tracksToAdd.length} tracks for playlist "${playlistTitle}" from storage.`); // Removed debug log
 
                     // Create the playlist first
                     feedback("TuneTransporter: Ensure you are on the Library > Playlists page.", 5000);
@@ -502,9 +530,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     // Clear storage after processing
                     chrome.storage.local.remove([storageKeyTitle, storageKeyTracks], () => {
                          if (chrome.runtime.lastError) {
-                            console.error("TuneTransporter ERROR: Failed to clear storage after Spotify processing:", chrome.runtime.lastError);
+                            console.error("ERROR: Failed to clear storage after Spotify processing:", chrome.runtime.lastError); // Keep error log
                          } else {
-                            console.log("TuneTransporter: Cleared Spotify playlist data from storage.");
+                            // console.log("TuneTransporter: Cleared Spotify playlist data from storage."); // Removed debug log
                          }
                     });
 
@@ -536,7 +564,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     finalStats = processResult;
 
                 } else {
-                    console.error(`TuneTransporter: Unknown source type "${source}" received.`);
+                    console.error(`Unknown source type "${source}" received.`); // Keep error log
                     feedback(`Error: Unknown processing source "${source}".`, 5000);
                 }
 
@@ -544,7 +572,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: operationSuccess, stats: finalStats });
 
             } catch (error) {
-                console.error("TuneTransporter ERROR in message listener:", error);
+                console.error("ERROR in message listener:", error); // Keep error log
                 feedback(`Error: ${error.message}`, 6000);
                 // Send failure response back to caller
                 sendResponse({ success: false, error: error.message, stats: finalStats });
@@ -552,9 +580,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (source === 'spotify') {
                      chrome.storage.local.remove([storageKeyTitle, storageKeyTracks], () => {
                          if (chrome.runtime.lastError) {
-                            console.error("TuneTransporter ERROR: Failed to clear storage after Spotify error:", chrome.runtime.lastError);
+                            console.error("ERROR: Failed to clear storage after Spotify error:", chrome.runtime.lastError); // Keep error log
                          } else {
-                            console.log("TuneTransporter: Cleared Spotify playlist data from storage after error.");
+                            // console.log("TuneTransporter: Cleared Spotify playlist data from storage after error."); // Removed debug log
                          }
                     });
                 }
@@ -569,7 +597,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false; // No async response planned for other actions
 });
 
-console.log("TuneTransporter (YTM): Content script loaded and listener ready.");
+// console.log("TuneTransporter (YTM): Content script loaded and listener ready."); // Removed debug log
 
 
 // Note: This script relies on `utils.js` (for showFeedback)
