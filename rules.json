@@ -27,5 +27,75 @@
       "urlFilter": "||lh3.googleusercontent.com^",
       "resourceTypes": ["image"]
     }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||googlevideo.com/videoplayback",
+      "resourceTypes": ["media"]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||music.youtube.com/youtubei/v1/music/get_search_suggestions*",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||music.youtube.com/youtubei/v1/guide*",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||music.youtube.com/youtubei/v1/account/account_menu*",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||music.youtube.com/youtubei/v1/att/get*",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["music.youtube.com"],
+      "urlFilter": "||music.youtube.com/youtubei/v1/log_event*",
+      "resourceTypes": ["xmlhttprequest", "ping"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["play.google.com"],
+      "urlFilter": "||play.google.com/log*",
+      "resourceTypes": ["xmlhttprequest", "ping"]
+    }
   }
 ]
