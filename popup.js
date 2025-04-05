@@ -23,7 +23,7 @@ function getSpotifyData() {
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-        if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim(); // Potential typo? Should this be a different separator?
+        // if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim(); // REMOVED - Incorrect logic
         const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
@@ -60,7 +60,7 @@ function getYtmData() {
         if (!artistString || typeof artistString !== 'string') return null;
         let primaryArtistPart = artistString.trim();
         if (primaryArtistPart.includes('•')) primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-        if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim(); // Potential typo?
+        // if (primaryArtistPart.includes('')) primaryArtistPart = primaryArtistPart.split('')[0].trim(); // REMOVED - Incorrect logic
         const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
         const cleanedArtists = artists.map(a => a.trim()).filter(Boolean);
         return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null;
@@ -96,7 +96,10 @@ function getYtmData() {
 
 
 // --- Main Popup Logic ---
+// console.log("[Popup Debug] popup.js script loaded."); // Removed debug log
 document.addEventListener('DOMContentLoaded', function () {
+    try { // ADDED try block
+    // console.log("[Popup Debug] DOMContentLoaded event fired."); // Removed debug log
     const spotifyToggle = document.getElementById('spotifyToggle');
     const ytmToggle = document.getElementById('ytmToggle');
     const copyYtmLinkBtn = document.getElementById('copyYtmLinkBtn');
@@ -105,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const copySpotifyPlaylistBtn = document.getElementById('copySpotifyPlaylistBtn');
     const copyYtmPlaylistBtn = document.getElementById('copyYtmPlaylistBtn');
     const createYtmPlaylistBtn = document.getElementById('createYtmPlaylistBtn');
-    console.log("[Popup Debug] Button elements obtained:", { copyYtmLinkBtn, copySpotifyLinkBtn, copyInfoBtn, copySpotifyPlaylistBtn, copyYtmPlaylistBtn, createYtmPlaylistBtn });
+    // console.log("[Popup Debug] Button elements obtained:", { copyYtmLinkBtn, copySpotifyLinkBtn, copyInfoBtn, copySpotifyPlaylistBtn, copyYtmPlaylistBtn, createYtmPlaylistBtn }); // Removed debug log
 
     // --- Helper to process script execution results --- (Defined inside DOMContentLoaded)
     function _handleScriptResult(results, sourceType, actionType) {
@@ -128,12 +131,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Handler Functions (Defined inside DOMContentLoaded) ---
 
     // Handle Copy LINK Button Click
-    async function handleCopyLinkClick(sourceType) {
-        console.log(`[Popup Debug] handleCopyLinkClick called with sourceType: ${sourceType}`);
+    async function handleCopyLinkClick(sourceType) { // Renamed from handleCopyYtmLinkClick / handleCopySpotifyLinkClick
+        // console.log(`[Popup Debug] handleCopyLinkClick called with sourceType: ${sourceType}`); // Removed debug log
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs || tabs.length === 0 || !tabs[0]?.id) {
-            showStatus("Error: Could not get current tab.", 4000);
-            console.error("[Popup Debug] handleCopyLinkClick: Failed to get current tab.");
+            showStatus("Error: Could not get current tab.", 4000); // Keep error message
+            // console.error("[Popup Debug] handleCopyLinkClick: Failed to get current tab."); // Removed debug log
             return;
         }
         const tabId = tabs[0].id;
@@ -188,12 +191,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Handle Copy INFO Button Click
-    async function handleCopyInfoClick() {
-        console.log(`[Popup Debug] handleCopyInfoClick called`);
+    async function handleCopyInfoClick() { // Renamed from handleCopyInfoBtnClick
+        // console.log(`[Popup Debug] handleCopyInfoClick called`); // Removed debug log
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs || tabs.length === 0 || !tabs[0]?.id || !tabs[0]?.url) {
-            showStatus("Error: Could not get current tab info.", 4000);
-            console.error("[Popup Debug] handleCopyInfoClick: Failed to get current tab info.");
+            showStatus("Error: Could not get current tab info.", 4000); // Keep error message
+            // console.error("[Popup Debug] handleCopyInfoClick: Failed to get current tab info."); // Removed debug log
             return;
         }
         const tabId = tabs[0].id;
@@ -240,12 +243,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Handle Copy SPOTIFY PLAYLIST/ALBUM/COLLECTION TRACKS Button Click
-    async function handleCopySpotifyPlaylistTracksClick() {
-        console.log(`[Popup Debug] handleCopySpotifyPlaylistTracksClick called`);
+    async function handleCopySpotifyPlaylistTracksClick() { // Renamed from handleCopySpotifyPlaylistBtnClick
+        // console.log(`[Popup Debug] handleCopySpotifyPlaylistTracksClick called`); // Removed debug log
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs || tabs.length === 0 || !tabs[0]?.id) {
-            showStatus("Error: Could not get current tab.", 4000);
-            console.error("[Popup Debug] handleCopySpotifyPlaylistTracksClick: Failed to get current tab.");
+            showStatus("Error: Could not get current tab.", 4000); // Keep error message
+            // console.error("[Popup Debug] handleCopySpotifyPlaylistTracksClick: Failed to get current tab."); // Removed debug log
             return;
         }
         const tabId = tabs[0].id;
@@ -265,15 +268,46 @@ document.addEventListener('DOMContentLoaded', function () {
                     await navigator.clipboard.writeText(clipboardText);
                     showStatus(`Copied "${pageTitle}" (${trackCount} tracks)!`);
                     console.log(`Successfully received ${trackCount} tracks and title "${pageTitle}" from content script and copied to clipboard.`);
-                    chrome.storage.local.set({ lastSpotifyPlaylistTitle: pageTitle }, () => {
-                        console.log(`Stored Spotify playlist title "${pageTitle}" for potential YTM creation.`);
+                    // Store title and track ARRAY first
+                    // console.log(`[Popup Debug] Preparing to save to storage. Type of trackList: ${typeof trackList}, Is Array: ${Array.isArray(trackList)}`); // Removed debug log
+                    // console.log("[Popup Debug] trackList content:", trackList); // Optional: Log content if needed, might be large
+                    chrome.storage.local.set({
+                        lastSpotifyPlaylistTitle: pageTitle,
+                        spotifyTracks: trackList // Ensure trackList is the array
+                     }, () => {
+                        console.log(`Stored Spotify playlist title "${pageTitle}" and track array (${trackCount} tracks).`);
+
+                        // Now, show prompt and set trigger flag if confirmed
+                        setTimeout(() => {
+                            if (confirm(`Copied "${pageTitle}" (${trackCount} tracks). Go to YouTube Music library to create the playlist?`)) {
+                                // Set trigger flag and title for service worker
+                                chrome.storage.local.set({ triggerYtmPrompt: true, playlistTitleToCreate: pageTitle }, () => { // Keep flag setting
+                                    // console.log(`[Popup Debug] Set triggerYtmPrompt flag for "${pageTitle}". Navigating...`); // Removed debug log
+                                    chrome.tabs.update(tabId, { url: "https://music.youtube.com/library/playlists" });
+                                });
+                            }
+                        }, 500); // Delay prompt slightly after storage save
                     });
                 } else {
                     await navigator.clipboard.writeText(pageTitle);
                     showStatus(`Copied title "${pageTitle}" (0 tracks found).`);
                     console.log(`Content script reported success but 0 tracks found. Copied title: "${pageTitle}"`);
-                    chrome.storage.local.set({ lastSpotifyPlaylistTitle: pageTitle }, () => {
-                        console.log(`Stored Spotify playlist title "${pageTitle}" (0 tracks) for potential YTM creation.`);
+                    // Store title and EMPTY track array if 0 tracks found
+                    chrome.storage.local.set({
+                        lastSpotifyPlaylistTitle: pageTitle,
+                        spotifyTracks: [] // Store empty array
+                    }, () => {
+                        console.log(`Stored Spotify playlist title "${pageTitle}" and cleared tracks (0 found).`);
+                        // Now, show prompt and set trigger flag if confirmed
+                        setTimeout(() => {
+                            if (confirm(`Copied title "${pageTitle}" (0 tracks found). Go to YouTube Music library anyway?`)) {
+                                // Set trigger flag and title for service worker
+                                chrome.storage.local.set({ triggerYtmPrompt: true, playlistTitleToCreate: pageTitle }, () => { // Keep flag setting
+                                    // console.log(`[Popup Debug] Set triggerYtmPrompt flag for "${pageTitle}" (0 tracks). Navigating...`); // Removed debug log
+                                    chrome.tabs.update(tabId, { url: "https://music.youtube.com/library/playlists" });
+                                });
+                            }
+                        }, 500); // Delay prompt slightly after storage save
                     });
                 }
             } else {
@@ -290,26 +324,26 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Handle Copy FULL YTM PLAYLIST Button Click
-    async function handleCopyFullYtmPlaylist() {
-        console.log(`[Popup Debug] handleCopyFullYtmPlaylist called`);
+    async function handleCopyFullYtmPlaylist() { // Renamed from handleCopyYtmPlaylistBtnClick
+        // console.log(`[Popup Debug] handleCopyFullYtmPlaylist called`); // Removed debug log
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs || tabs.length === 0 || !tabs[0]?.id) {
-            showStatus("Error: Could not get current tab.", 4000);
-            console.error("[Popup Debug] handleCopyFullYtmPlaylist: Failed to get current tab.");
+            showStatus("Error: Could not get current tab.", 4000); // Keep error message
+            // console.error("[Popup Debug] handleCopyFullYtmPlaylist: Failed to get current tab."); // Removed debug log
             return;
         }
         const tabId = tabs[0].id;
 
         showStatus("Extracting YTM playlist (may take time)...", 0);
         try {
-            console.log("[Popup Debug] Injecting YTM playlist scripts...");
+            // console.log("[Popup Debug] Injecting YTM playlist scripts..."); // Removed debug log
             await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 files: ['utils.js', 'ytm-playlist-content.js']
             });
-            console.log("[Popup Debug] Scripts injected.");
+            // console.log("[Popup Debug] Scripts injected."); // Removed debug log
 
-            console.log("[Popup Debug] Executing YTM playlist extraction function...");
+            // console.log("[Popup Debug] Executing YTM playlist extraction function..."); // Removed debug log
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 func: (containerSelector, trackRowSelector) => {
@@ -325,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'ytmusic-responsive-list-item-renderer'
                 ]
             });
-            console.log("[Popup Debug] YTM playlist script execution results:", results);
+            // console.log("[Popup Debug] YTM playlist script execution results:", results); // Removed debug log
 
            if (chrome.runtime.lastError) {
                if (chrome.runtime.lastError.message.includes("Could not establish connection") || chrome.runtime.lastError.message.includes("Receiving end does not exist")) {
@@ -377,12 +411,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Handle Create YTM PLAYLIST Button Click
-    async function handleCreateYtmPlaylistClick() {
-        console.log(`[Popup Debug] handleCreateYtmPlaylistClick called`);
+    async function handleCreateYtmPlaylistClick() { // Renamed from handleCreateYtmPlaylistBtnClick
+        // console.log(`[Popup Debug] handleCreateYtmPlaylistClick called`); // Removed debug log
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tabs || tabs.length === 0 || !tabs[0]?.id) {
-            showStatus("Error: Could not get current tab.", 4000);
-            console.error("[Popup Debug] handleCreateYtmPlaylistClick: Failed to get current tab.");
+            showStatus("Error: Could not get current tab.", 4000); // Keep error message
+            // console.error("[Popup Debug] handleCreateYtmPlaylistClick: Failed to get current tab."); // Removed debug log
             return;
         }
         const tabId = tabs[0].id;
@@ -396,14 +430,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             console.log(`Retrieved Spotify title "${playlistTitle}" for YTM creation.`);
 
-            console.log("[Popup Debug] Injecting scripts for YTM playlist creation...");
+            // Add a small delay before injecting scripts, especially when called automatically
+            // console.log("[Popup Debug] Adding short delay before script injection..."); // Removed debug log
+            await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
+
+            // console.log("[Popup Debug] Injecting scripts for YTM playlist creation..."); // Removed debug log
             await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 files: ['utils.js', 'ytm-playlist-content.js']
             });
-            console.log("[Popup Debug] Scripts injected for creation.");
+            // console.log("[Popup Debug] Scripts injected for creation."); // Removed debug log
 
-            console.log("[Popup Debug] Executing createYtmPlaylist function...");
+            // console.log("[Popup Debug] Executing createYtmPlaylist function..."); // Removed debug log
             const results = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 func: (title) => {
@@ -416,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 args: [playlistTitle]
             });
-            console.log("[Popup Debug] YTM playlist creation script execution results:", results);
+            // console.log("[Popup Debug] YTM playlist creation script execution results:", results); // Removed debug log
 
             if (chrome.runtime.lastError) {
                  if (chrome.runtime.lastError.message.includes("Could not establish connection") || chrome.runtime.lastError.message.includes("Receiving end does not exist")) {
@@ -472,7 +510,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Set Initial Button States and Attach Listeners ---
     const initializePopupState = async () => {
-        console.log("[Popup Debug] initializePopupState started.");
+        // console.log("[Popup Debug] initializePopupState started."); // Removed debug log
         let currentUrl = '';
         let tabId = null;
         let isYtm = false;
@@ -491,11 +529,12 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             currentUrl = tabs[0].url;
             tabId = tabs[0].id;
-            console.log(`[Popup Debug] Initializing for Tab URL: ${currentUrl}, ID: ${tabId}`);
+            // console.log(`[Popup Debug] Initializing for Tab URL: ${currentUrl}, ID: ${tabId}`); // Removed debug log
 
             // Determine button capabilities based on URL
-            console.log("[Popup Debug] Determining button capabilities...");
+            // console.log("[Popup Debug] Determining button capabilities..."); // Removed debug log
             if (currentUrl.startsWith("https://open.spotify.com/")) {
+                isYtm = false; // Explicitly set
                 canCopyInfo = true;
                 if (currentUrl.includes("/track/")) { canCopyYtm = true; }
                 else if (currentUrl.includes("/album/")) { canCopyYtm = true; canCopySpotifyPlaylist = true; }
@@ -509,74 +548,144 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (currentUrl.includes("/watch?")) { canCopySpotify = true; }
                 else if (currentUrl.includes("/playlist?list=")) { canCopySpotify = true; canCopyYtmPlaylist = true; }
                 else if (currentUrl.includes("/channel/")) { canCopySpotify = true; }
+                // Special check for library page to potentially enable create button later
+                else if (currentUrl.includes("/library/playlists")) { // Keep check for library page
+                    // console.log("[Popup Debug] On YTM library playlists page."); // Removed debug log
+                }
                 else { statusMsg = "Not a YTM song/playlist/artist page."; }
             }
             else if (currentUrl.startsWith("https://www.youtube.com/watch")) { statusMsg = "Copying not supported here."; }
             else { statusMsg = "Not on Spotify or YTM."; }
 
             // Check storage for create button state only if on YTM
-            console.log("[Popup Debug] Checking storage for YTM create state (isYtm=" + isYtm + ")...");
+            // console.log("[Popup Debug] Checking storage for YTM create state (isYtm=" + isYtm + ")..."); // Removed debug log
             if (isYtm) {
                 try {
+                    // Check 'lastSpotifyPlaylistTitle' to enable the create button
                     const storageResult = await chrome.storage.local.get(['lastSpotifyPlaylistTitle']);
                     if (storageResult.lastSpotifyPlaylistTitle) {
-                        canCreateYtmPlaylist = true;
+                       canCreateYtmPlaylist = true; // Keep logic
+                        // console.log("[Popup Debug] Found lastSpotifyPlaylistTitle, enabling create button."); // Removed debug log
+                    } else {
+                        // console.log("[Popup Debug] No lastSpotifyPlaylistTitle found."); // Removed debug log
                     }
                 } catch (storageError) {
-                    console.error("[Popup Debug] Error getting data from storage:", storageError);
+                    console.error("Error getting lastSpotifyPlaylistTitle from storage:", storageError); // Keep error log
                     showStatus("Error accessing storage.", 4000);
                 }
             }
-             console.log("[Popup Debug] Storage check complete (if applicable).");
+            // console.log("[Popup Debug] Storage check complete (if applicable)."); // Removed debug log
+            // console.log("[Popup Debug] Button capability determination complete."); // Removed debug log
 
         } catch (error) {
-            console.warn("[Popup Debug] Error during initialization:", error);
+            console.warn("Error during initialization:", error); // Keep warning log
             showStatus(`Error: ${error.message}`, 0);
+            // Reset all flags on error
             canCopyYtm = canCopySpotify = canCopyInfo = canCopySpotifyPlaylist = canCopyYtmPlaylist = canCreateYtmPlaylist = false;
         }
-        console.log("[Popup Debug] Button capability determination complete.");
+
 
         // Set button disabled states
-        console.log("[Popup Debug] Setting button disabled states...");
+        // console.log("[Popup Debug] Setting button disabled states..."); // Removed debug log
         copyYtmLinkBtn.disabled = !canCopyYtm;
         copySpotifyLinkBtn.disabled = !canCopySpotify;
         copyInfoBtn.disabled = !canCopyInfo;
         copySpotifyPlaylistBtn.disabled = !canCopySpotifyPlaylist;
         copyYtmPlaylistBtn.disabled = !canCopyYtmPlaylist;
         createYtmPlaylistBtn.disabled = !canCreateYtmPlaylist;
-         console.log("[Popup Debug] Button disabled states set:", {
-            copyYtmLinkBtn: copyYtmLinkBtn.disabled,
-            copySpotifyLinkBtn: copySpotifyLinkBtn.disabled,
-            copyInfoBtn: copyInfoBtn.disabled,
-            copySpotifyPlaylistBtn: copySpotifyPlaylistBtn.disabled,
-            copyYtmPlaylistBtn: copyYtmPlaylistBtn.disabled,
-            createYtmPlaylistBtn: createYtmPlaylistBtn.disabled
-        });
+        // console.log("[Popup Debug] Button disabled states set:", { ... }); // Removed debug log
 
-        // Attach listeners synchronously
-        console.log("[Popup Debug] Attaching event listeners...");
+        // Attach listeners directly (no need to clone/replace)
+        // console.log("[Popup Debug] Attaching event listeners..."); // Removed debug log
         copyYtmLinkBtn.addEventListener('click', () => handleCopyLinkClick('spotify'));
         copySpotifyLinkBtn.addEventListener('click', () => handleCopyLinkClick('ytm'));
         copyInfoBtn.addEventListener('click', handleCopyInfoClick);
         copySpotifyPlaylistBtn.addEventListener('click', handleCopySpotifyPlaylistTracksClick);
         copyYtmPlaylistBtn.addEventListener('click', handleCopyFullYtmPlaylist);
         createYtmPlaylistBtn.addEventListener('click', handleCreateYtmPlaylistClick);
-        console.log("[Popup Debug] Event listeners attached.");
+        // console.log("[Popup Debug] Event listeners attached."); // Removed debug log
 
         // Set status message
-        console.log("[Popup Debug] Setting status message...");
+        // console.log("[Popup Debug] Setting status message..."); // Removed debug log
         if (!canCopyYtm && !canCopySpotify && !canCopyInfo && !canCopySpotifyPlaylist && !canCopyYtmPlaylist && !canCreateYtmPlaylist && statusMsg) {
             showStatus(statusMsg, 0);
         } else {
             showStatus("");
         }
+
+        // SessionStorage check removed as creation is now triggered by ytm-library-content.js
     };
 
-    initializePopupState().then(() => {
-        console.log("[Popup Debug] initializePopupState finished successfully.");
+    // Initialize the popup state
+        initializePopupState().then(async () => { // Make the .then callback async
+            // console.log("[Popup Debug] initializePopupState promise resolved successfully."); // Removed debug log
+
+            // --- NEW: Check for playlist creation prompt flag ---
+            // console.log("[Popup Debug] Checking for playlist creation prompt flag..."); // Removed debug log
+            try {
+                const data = await chrome.storage.local.get(['promptCreatePlaylistOnLoad', 'playlistTitleToCreate']); // Keep check
+                // console.log("[Popup Debug] Storage data retrieved for flag check:", data); // Removed debug log
+                if (data.promptCreatePlaylistOnLoad && data.playlistTitleToCreate) { // Keep check
+                    // console.log(`[Popup Debug] Found flag for "${data.playlistTitleToCreate}".`); // Removed debug log
+                    // --- DELAYED FLAG REMOVAL ---
+                // await chrome.storage.local.remove(['promptCreatePlaylistOnLoad', 'playlistTitleToCreate']);
+                // console.log("[Popup Debug] Cleared playlist creation prompt flag.");
+
+                // Check if we are actually on the YTM library page
+                const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                const currentTab = tabs && tabs[0];
+                // console.log("[Popup Debug] Current tab info:", currentTab); // Removed debug log
+                if (currentTab && currentTab.url && currentTab.url.includes("/library/playlists")) { // Keep check
+                    // console.log("[Popup Debug] URL matches YTM library page. Setting timeout for prompt..."); // Removed debug log
+                     // Use setTimeout to ensure the popup is fully rendered before showing confirm
+                    setTimeout(() => { // Keep timeout
+                        // console.log("[Popup Debug] Timeout finished. Showing confirm dialog..."); // Removed debug log
+                        if (confirm(`Do you want to create the YouTube Music playlist "${data.playlistTitleToCreate}" now?`)) { // Keep confirm
+                            // console.log("[Popup Debug] User confirmed playlist creation."); // Removed debug log
+                            // Trigger the creation function directly
+                            // Ensure the button is enabled first (it should be if lastSpotifyPlaylistTitle is set)
+                            if (!createYtmPlaylistBtn.disabled) { // Keep check
+                                // console.log("[Popup Debug] Create button enabled. Calling handleCreateYtmPlaylistClick()."); // Removed debug log
+                                handleCreateYtmPlaylistClick();
+                            } else {
+                                console.warn("Create button was disabled, cannot trigger creation automatically."); // Keep warning
+                                showStatus("Cannot auto-create: Create button disabled.", 4000);
+                            }
+                        } else {
+                            // console.log("[Popup Debug] User cancelled playlist creation prompt."); // Removed debug log
+                        }
+                        // --- REMOVE FLAG AFTER PROMPT ---
+                        chrome.storage.local.remove(['promptCreatePlaylistOnLoad', 'playlistTitleToCreate'], () => { // Keep flag removal
+                            // console.log("[Popup Debug] Cleared playlist creation prompt flag (after prompt)."); // Removed debug log
+                        });
+                    }, 100); // Short delay
+                } else {
+                    // console.log("[Popup Debug] Flag found, but not on YTM library page. Prompt skipped."); // Removed debug log
+                     // --- REMOVE FLAG IF NOT ON CORRECT PAGE ---
+                    chrome.storage.local.remove(['promptCreatePlaylistOnLoad', 'playlistTitleToCreate'], () => { // Keep flag removal
+                         // console.log("[Popup Debug] Cleared playlist creation prompt flag (incorrect page)."); // Removed debug log
+                     });
+                }
+            } else {
+                // console.log("[Popup Debug] No playlist creation prompt flag found in storage."); // Removed debug log
+            }
+        } catch (error) {
+            console.error("Error checking/handling playlist creation prompt flag:", error); // Keep error log
+            showStatus("Error checking for auto-create prompt.", 4000);
+        }
+        // --- END NEW LOGIC ---
+
     }).catch(err => {
-        console.error("[Popup Debug] initializePopupState failed:", err);
+        console.error("initializePopupState failed:", err); // Keep error log
         showStatus("Error initializing popup.", 0);
     }); // Run the initialization logic and log completion/failure
 
+    } catch (error) { // ADDED catch block
+        console.error("CRITICAL ERROR in DOMContentLoaded listener:", error); // Keep error log
+        // Try to display an error message in the popup itself
+        const statusElement = document.getElementById('statusMessage');
+        if (statusElement) {
+             statusElement.textContent = `CRITICAL ERROR! Check console. ${error.message}`;
+        }
+    }
 }); // End DOMContentLoaded
