@@ -1,6 +1,23 @@
 // TuneTransporter/ytm-autoclick-content.js
 
+// --- State Keys (borrowed from ytm-search-content.js for checking) ---
+const PROCESSING_FLAG_CHECK = 'tuneTransporterProcessing';
+const NEXT_STEP_FLAG_CHECK = 'tuneTransporterNextStep';
+
+
 function handleYtmSearchResultRedirect() {
+    // --- Check if the multi-step process is active ---
+    const isProcessing = sessionStorage.getItem(PROCESSING_FLAG_CHECK) === 'true';
+    const nextStep = sessionStorage.getItem(NEXT_STEP_FLAG_CHECK);
+
+    // If the library processing is active and expects to be on the search page,
+    // let ytm-search-content.js handle it. Don't auto-click.
+    if (isProcessing && nextStep === 'findSongOnSearchPage') {
+        console.log("TuneTransporter (YTM AutoClick): Multi-step process active ('findSongOnSearchPage'). Auto-click disabled for this page load.");
+        return; // Exit early
+    }
+    // --- End Check ---
+
     const trackLinkSelector = 'ytmusic-card-shelf-renderer div.details-container yt-formatted-string.title a.yt-simple-endpoint[href^="watch?v="]';
     const chevronButtonSelector = 'div.main-action-container yt-button-shape[icon-name="yt-sys-icons:chevron_right"] button.yt-spec-button-shape-next--icon-button';
 
@@ -66,4 +83,5 @@ function handleYtmSearchResultRedirect() {
 
 // --- Trigger the observer ---
 // Run the function when the content script loads on a matching page
+// No need to check flags here, the function itself does it now.
 handleYtmSearchResultRedirect();
