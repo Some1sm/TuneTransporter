@@ -1,0 +1,31 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "initiatorDomains": ["music.youtube.com"],
+      "resourceTypes": ["image"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||i.ytimg.com^",
+      "resourceTypes": ["image"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||lh3.googleusercontent.com^",
+      "resourceTypes": ["image"]
+    }
+  }
+]

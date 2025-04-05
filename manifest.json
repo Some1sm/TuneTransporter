@@ -13,7 +13,8 @@
     "storage",
     "scripting",
     "tabs",
-    "clipboardWrite"
+    "clipboardWrite",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "*://open.spotify.com/*",
@@ -75,5 +76,14 @@
       "js": [ "utils.js", "ytm-watch-content.js" ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
 }
