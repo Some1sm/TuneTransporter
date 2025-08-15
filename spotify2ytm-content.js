@@ -306,8 +306,9 @@
 
              const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
              console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
-             chrome.storage.local.set({ 'tuneTransporterFromSpotify': true }, () => {
-                 console.log("TuneTransporter: Flag 'tuneTransporterFromSpotify' set in chrome.storage.local.");
+             const redirectType = pageData.isArtistSearch ? 'artist' : 'album';
+             chrome.storage.local.set({ 'tuneTransporterRedirectType': redirectType }, () => {
+                 console.log(`TuneTransporter: Flag 'tuneTransporterRedirectType' set to '${redirectType}' in chrome.storage.local.`);
                  window.location.href = youtubeMusicSearchUrl;
              });
 

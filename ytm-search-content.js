@@ -347,28 +347,28 @@ async function handleSpotifyRedirect() {
     feedback("Detected redirect from Spotify. Looking for results...", 3000);
 
     try {
-        // --- 1. Click the "Albums" or "Artists" filter chip ---
-        const albumChipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="album results"]';
-        const artistChipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="artist results"]';
-        
-        // Wait for either chip to be available
-        const albumChip = await waitForElement(albumChipSelector, 7000);
-        
-        if (albumChip) {
-            console.log("[YTM Search Content Script] Found 'Albums' filter chip. Clicking...");
-            feedback("Switching to album results...", 2000);
-            albumChip.click();
+        const redirectType = (await new Promise(resolve => chrome.storage.local.get('tuneTransporterRedirectType', result => resolve(result.tuneTransporterRedirectType)))) || 'album';
+        console.log(`[YTM Search Content Script] Detected redirect type: ${redirectType}`);
+
+        // --- 1. Click the correct filter chip based on redirectType ---
+        let chipSelector, chipName;
+        if (redirectType === 'artist') {
+            chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="artist results"]';
+            chipName = 'Artists';
+        } else { // Default to album
+            chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="album results"]';
+            chipName = 'Albums';
+        }
+
+        console.log(`[YTM Search Content Script] Waiting for '${chipName}' filter chip...`);
+        const filterChip = await waitForElement(chipSelector, 7000);
+
+        if (filterChip) {
+            console.log(`[YTM Search Content Script] Found '${chipName}' filter chip. Clicking...`);
+            feedback(`Switching to ${chipName.toLowerCase()} results...`, 2000);
+            filterChip.click();
         } else {
-            // If album chip isn't found, maybe it's an artist search. Let's try that.
-            const artistChip = await waitForElement(artistChipSelector, 3000); // Shorter wait if album fails
-            if (artistChip) {
-                console.log("[YTM Search Content Script] Found 'Artists' filter chip. Clicking...");
-                feedback("Switching to artist results...", 2000);
-                artistChip.click();
-            } else {
-                 console.warn("[YTM Search Content Script] Could not find 'Albums' or 'Artists' filter chip. Attempting to click first result directly.");
-                 // feedback("Could not find filter. Trying first result...", 2000);
-            }
+            console.warn(`[YTM Search Content Script] Could not find '${chipName}' filter chip. Attempting to click first result directly.`);
         }
         
         // Give the page a moment to update after the click
@@ -385,20 +385,18 @@ async function handleSpotifyRedirect() {
             console.log("[YTM Search Content Script] Found first result link after filtering. Clicking:", firstResultLink);
             feedback("Clicking first result...", 1500);
             firstResultLink.click();
-            // Once clicked, clear the flag so it doesn't re-run on the next page
-            chrome.storage.local.remove('tuneTransporterFromSpotify');
         } else {
             console.error("[YTM Search Content Script] Could not find the first result link after filtering.");
             feedback("Could not find the first result to click.", 4000);
-            // Still remove the flag to prevent loops
-            chrome.storage.local.remove('tuneTransporterFromSpotify');
         }
+        // Always clear the flag after attempting the click
+        chrome.storage.local.remove('tuneTransporterRedirectType');
 
     } catch (error) {
         console.error("[YTM Search Content Script] Error during Spotify redirect handling:", error);
         feedback("An error occurred handling the redirect.", 4000);
         // Ensure the flag is cleared on error to prevent issues
-        chrome.storage.local.remove('tuneTransporterFromSpotify');
+        chrome.storage.local.remove('tuneTransporterRedirectType');
     }
 }
 
@@ -407,9 +405,9 @@ async function handleSearchPage() {
     console.log("[YTM Search Content Script] handleSearchPage called.");
     try {
         // --- Check for Spotify redirect FIRST ---
-        chrome.storage.local.get('tuneTransporterFromSpotify', async (result) => {
-            if (result.tuneTransporterFromSpotify) {
-                console.log("[YTM Search Content Script] 'tuneTransporterFromSpotify' flag is true. Starting redirect handling.");
+        chrome.storage.local.get('tuneTransporterRedirectType', async (result) => {
+            if (result.tuneTransporterRedirectType) {
+                console.log(`[YTM Search Content Script] 'tuneTransporterRedirectType' found ('${result.tuneTransporterRedirectType}'). Starting redirect handling.`);
                 // It's a redirect, handle it and stop further execution of the old logic.
                 await handleSpotifyRedirect();
                 return; // Exit the function
