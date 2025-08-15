@@ -341,15 +341,86 @@ window.location.href = nextSearchUrl;
 
 
 // --- Main Logic ---
-async function handleSearchPage() {
-// Removed duplicate function declaration
-   console.log("[YTM Search Content Script] handleSearchPage called.");
-   try {
-       const nextStep = sessionStorage.getItem(NEXT_STEP_FLAG);
-       const isProcessing = sessionStorage.getItem(PROCESSING_FLAG) === 'true';
+// --- New function to handle Spotify Album/Artist Redirects ---
+async function handleSpotifyRedirect() {
+    console.log("[YTM Search Content Script] handleSpotifyRedirect called.");
+    feedback("Detected redirect from Spotify. Looking for results...", 3000);
 
-       if (isProcessing && nextStep === 'findSongOnSearchPage') {
-           console.log("[YTM Search Content Script] Correct state found. Waiting for search results...");
+    try {
+        // --- 1. Click the "Albums" or "Artists" filter chip ---
+        const albumChipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="album results"]';
+        const artistChipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="artist results"]';
+        
+        // Wait for either chip to be available
+        const albumChip = await waitForElement(albumChipSelector, 7000);
+        
+        if (albumChip) {
+            console.log("[YTM Search Content Script] Found 'Albums' filter chip. Clicking...");
+            feedback("Switching to album results...", 2000);
+            albumChip.click();
+        } else {
+            // If album chip isn't found, maybe it's an artist search. Let's try that.
+            const artistChip = await waitForElement(artistChipSelector, 3000); // Shorter wait if album fails
+            if (artistChip) {
+                console.log("[YTM Search Content Script] Found 'Artists' filter chip. Clicking...");
+                feedback("Switching to artist results...", 2000);
+                artistChip.click();
+            } else {
+                 console.warn("[YTM Search Content Script] Could not find 'Albums' or 'Artists' filter chip. Attempting to click first result directly.");
+                 // feedback("Could not find filter. Trying first result...", 2000);
+            }
+        }
+        
+        // Give the page a moment to update after the click
+        await (typeof delay === 'function' ? delay(750) : new Promise(resolve => setTimeout(resolve, 750)));
+
+        // --- 2. Click the first result in the list ---
+        // This selector should work for albums, artists, and songs in shelves
+        const firstResultSelector = 'ytmusic-shelf-renderer div#contents ytmusic-responsive-list-item-renderer:first-of-type a.yt-simple-endpoint';
+        
+        console.log("[YTM Search Content Script] Waiting for the first result to appear after filtering...");
+        const firstResultLink = await waitForElement(firstResultSelector, 7000);
+
+        if (firstResultLink) {
+            console.log("[YTM Search Content Script] Found first result link after filtering. Clicking:", firstResultLink);
+            feedback("Clicking first result...", 1500);
+            firstResultLink.click();
+            // Once clicked, clear the flag so it doesn't re-run on the next page
+            chrome.storage.local.remove('tuneTransporterFromSpotify');
+        } else {
+            console.error("[YTM Search Content Script] Could not find the first result link after filtering.");
+            feedback("Could not find the first result to click.", 4000);
+            // Still remove the flag to prevent loops
+            chrome.storage.local.remove('tuneTransporterFromSpotify');
+        }
+
+    } catch (error) {
+        console.error("[YTM Search Content Script] Error during Spotify redirect handling:", error);
+        feedback("An error occurred handling the redirect.", 4000);
+        // Ensure the flag is cleared on error to prevent issues
+        chrome.storage.local.remove('tuneTransporterFromSpotify');
+    }
+}
+
+
+async function handleSearchPage() {
+    console.log("[YTM Search Content Script] handleSearchPage called.");
+    try {
+        // --- Check for Spotify redirect FIRST ---
+        chrome.storage.local.get('tuneTransporterFromSpotify', async (result) => {
+            if (result.tuneTransporterFromSpotify) {
+                console.log("[YTM Search Content Script] 'tuneTransporterFromSpotify' flag is true. Starting redirect handling.");
+                // It's a redirect, handle it and stop further execution of the old logic.
+                await handleSpotifyRedirect();
+                return; // Exit the function
+            }
+
+            // --- If not a redirect, proceed with the original playlist logic ---
+            const nextStep = sessionStorage.getItem(NEXT_STEP_FLAG);
+            const isProcessing = sessionStorage.getItem(PROCESSING_FLAG) === 'true';
+
+            if (isProcessing && nextStep === 'findSongOnSearchPage') {
+                console.log("[YTM Search Content Script] Correct state found. Waiting for search results...");
 
            // --- Add progress to feedback ---
            let progressText = "";
@@ -447,7 +518,8 @@ async function handleSearchPage() {
 
        } else {
             console.log("[YTM Search Content Script] Not in the correct processing state. Flags:", { isProcessing, nextStep });
-       } // This closes the main if (isProcessing && nextStep === 'findSongOnSearchPage') block
+           } // This closes the main if (isProcessing && nextStep === 'findSongOnSearchPage') block
+       }); // This closes chrome.storage.local.get
    } catch (error) {
        console.error("[YTM Search Content Script] Error in handleSearchPage:", error);
        feedback(`Error on search page: ${error.message}`, 5000);
