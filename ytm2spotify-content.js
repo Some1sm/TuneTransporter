@@ -228,20 +228,21 @@ function initializeWatchPageObserver() {
 
 
 // --- Main execution ---
-// First, check if we arrived from Spotify via the persistent flag
-chrome.storage.local.get(['tuneTransporterFromSpotify'], function (flagResult) {
-    if (flagResult.tuneTransporterFromSpotify === true) {
-        console.log("TuneTransporter: Detected 'tuneTransporterFromSpotify' flag in storage. Stopping YTM->Spotify script.");
-        // Remove the flag so it doesn't interfere with subsequent navigations
-        chrome.storage.local.remove('tuneTransporterFromSpotify', () => {
-            console.log("TuneTransporter: Removed 'tuneTransporterFromSpotify' flag.");
+// First, check if we arrived from Spotify via the new persistent flag
+chrome.storage.local.get(['tuneTransporterRedirectType'], function (flagResult) {
+    if (flagResult.tuneTransporterRedirectType) {
+        console.log(`TuneTransporter: Detected 'tuneTransporterRedirectType' flag ('${flagResult.tuneTransporterRedirectType}'). Stopping YTM->Spotify script for this page load.`);
+        // Remove the flag so it doesn't interfere with subsequent navigations.
+        // This is a safety measure; ytm-search-content.js should already clear it.
+        chrome.storage.local.remove('tuneTransporterRedirectType', () => {
+            console.log("TuneTransporter: Removed 'tuneTransporterRedirectType' flag as a fallback.");
         });
-        // IMPORTANT: Stop execution here, do not proceed to the ytmEnabled check
+        // IMPORTANT: Stop execution here to prevent a redirect loop.
         return;
     }
 
     // If the flag wasn't set, proceed with the normal logic
-    console.log("TuneTransporter: No 'tuneTransporterFromSpotify' flag found. Proceeding with normal execution.");
+    console.log("TuneTransporter: No 'tuneTransporterRedirectType' flag found. Proceeding with normal execution.");
     chrome.storage.local.get(['ytmEnabled'], function (settingsResult) {
         // Global sessionStorage check: Was there an internal YTM redirect?
         // This check remains relevant for internal YTM navigations unrelated to Spotify->YTM flow.

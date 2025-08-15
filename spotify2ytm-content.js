@@ -267,12 +267,16 @@
 
      try {
          // --- Route to Page Handler ---
+         let pageType = 'unknown';
          if (pathname.startsWith('/track/')) {
              pageData = handleSpotifyTrackPage();
+             pageType = 'track';
          } else if (pathname.startsWith('/album/')) { // Covers Albums AND Singles
              pageData = handleSpotifyAlbumPage();
+             pageType = 'album';
          } else if (pathname.startsWith('/artist/')) {
              pageData = handleSpotifyArtistPage();
+             pageType = 'artist';
          } else if (pathname.startsWith('/search/')) {
              handleSpotifySearchPage(); // Handles its own redirection/feedback
              return; // Stop further execution for search pages
@@ -306,7 +310,14 @@
 
              const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}`;
              console.log(`TuneTransporter: Redirecting to YTM search: ${youtubeMusicSearchUrl}`);
-             const redirectType = pageData.isArtistSearch ? 'artist' : 'album';
+             // Determine redirectType based on the pageType found earlier
+             let redirectType = 'album'; // Default
+             if (pageType === 'artist' || pageData.isArtistSearch) {
+                 redirectType = 'artist';
+             } else if (pageType === 'track') {
+                 redirectType = 'track';
+             }
+
              chrome.storage.local.set({ 'tuneTransporterRedirectType': redirectType }, () => {
                  console.log(`TuneTransporter: Flag 'tuneTransporterRedirectType' set to '${redirectType}' in chrome.storage.local.`);
                  window.location.href = youtubeMusicSearchUrl;

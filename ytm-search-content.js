@@ -350,47 +350,71 @@ async function handleSpotifyRedirect() {
         const redirectType = (await new Promise(resolve => chrome.storage.local.get('tuneTransporterRedirectType', result => resolve(result.tuneTransporterRedirectType)))) || 'album';
         console.log(`[YTM Search Content Script] Detected redirect type: ${redirectType}`);
 
-        // --- 1. Click the correct filter chip based on redirectType ---
-        let chipSelector, chipName;
-        if (redirectType === 'artist') {
-            chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="artist results"]';
-            chipName = 'Artists';
-        } else { // Default to album
-            chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="album results"]';
-            chipName = 'Albums';
-        }
+        // --- 1. Handle redirect based on type ---
+        if (redirectType === 'track') {
+            // For tracks, we don't filter. We just click the first valid result.
+            console.log("[YTM Search Content Script] Handling 'track' redirect. Looking for top song result.");
+            feedback("Looking for song result...", 2000);
+            
+            // Selector for a song in the "Top result" card or the "Songs" shelf
+            const trackSelector = `
+                ytmusic-card-shelf-renderer a.yt-simple-endpoint[href^="watch?v="],
+                ytmusic-shelf-renderer[shelf-id="Songs"] ytmusic-responsive-list-item-renderer:first-of-type a.yt-simple-endpoint[href^="watch?v="]
+            `.trim();
 
-        console.log(`[YTM Search Content Script] Waiting for '${chipName}' filter chip...`);
-        const filterChip = await waitForElement(chipSelector, 7000);
+            const trackLink = await waitForElement(trackSelector, 7000);
+            if (trackLink) {
+                console.log("[YTM Search Content Script] Found track link. Clicking:", trackLink);
+                feedback("Opening song...", 1500);
+                trackLink.click();
+            } else {
+                console.error("[YTM Search Content Script] Could not find a clickable track link for the song redirect.");
+                feedback("Could not find the song result to click.", 4000);
+            }
 
-        if (filterChip) {
-            console.log(`[YTM Search Content Script] Found '${chipName}' filter chip. Clicking...`);
-            feedback(`Switching to ${chipName.toLowerCase()} results...`, 2000);
-            filterChip.click();
-        } else {
-            console.warn(`[YTM Search Content Script] Could not find '${chipName}' filter chip. Attempting to click first result directly.`);
+        } else { // For 'album' or 'artist'
+            let chipSelector, chipName;
+            if (redirectType === 'artist') {
+                chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="artist results"]';
+                chipName = 'Artists';
+            } else { // Default to album
+                chipSelector = 'ytmusic-chip-cloud-chip-renderer a[title*="album results"]';
+                chipName = 'Albums';
+            }
+
+            console.log(`[YTM Search Content Script] Waiting for '${chipName}' filter chip...`);
+            const filterChip = await waitForElement(chipSelector, 7000);
+
+            if (filterChip) {
+                console.log(`[YTM Search Content Script] Found '${chipName}' filter chip. Clicking...`);
+                feedback(`Switching to ${chipName.toLowerCase()} results...`, 2000);
+                filterChip.click();
+            } else {
+                console.warn(`[YTM Search Content Script] Could not find '${chipName}' filter chip. Attempting to click first result directly.`);
+            }
+
+            // Give the page a moment to update after the click
+            await (typeof delay === 'function' ? delay(750) : new Promise(resolve => setTimeout(resolve, 750)));
+
+            // --- 2. Click the first result in the list ---
+            const firstResultSelector = 'ytmusic-shelf-renderer div#contents ytmusic-responsive-list-item-renderer:first-of-type a.yt-simple-endpoint';
+            
+            console.log("[YTM Search Content Script] Waiting for the first result to appear after filtering...");
+            const firstResultLink = await waitForElement(firstResultSelector, 7000);
+
+            if (firstResultLink) {
+                console.log("[YTM Search Content Script] Found first result link after filtering. Clicking:", firstResultLink);
+                feedback("Clicking first result...", 1500);
+                firstResultLink.click();
+            } else {
+                console.error("[YTM Search Content Script] Could not find the first result link after filtering.");
+                feedback("Could not find the first result to click.", 4000);
+            }
         }
         
-        // Give the page a moment to update after the click
-        await (typeof delay === 'function' ? delay(750) : new Promise(resolve => setTimeout(resolve, 750)));
-
-        // --- 2. Click the first result in the list ---
-        // This selector should work for albums, artists, and songs in shelves
-        const firstResultSelector = 'ytmusic-shelf-renderer div#contents ytmusic-responsive-list-item-renderer:first-of-type a.yt-simple-endpoint';
-        
-        console.log("[YTM Search Content Script] Waiting for the first result to appear after filtering...");
-        const firstResultLink = await waitForElement(firstResultSelector, 7000);
-
-        if (firstResultLink) {
-            console.log("[YTM Search Content Script] Found first result link after filtering. Clicking:", firstResultLink);
-            feedback("Clicking first result...", 1500);
-            firstResultLink.click();
-        } else {
-            console.error("[YTM Search Content Script] Could not find the first result link after filtering.");
-            feedback("Could not find the first result to click.", 4000);
-        }
-        // Always clear the flag after attempting the click
+        // Always clear the flag after attempting any action
         chrome.storage.local.remove('tuneTransporterRedirectType');
+        console.log("[YTM Search Content Script] Cleared 'tuneTransporterRedirectType' flag after handling redirect.");
 
     } catch (error) {
         console.error("[YTM Search Content Script] Error during Spotify redirect handling:", error);
