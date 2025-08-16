@@ -391,9 +391,11 @@ document.addEventListener('DOMContentLoaded', function () {
                          // Store data for the content script to read on the new page
                          chrome.storage.local.set({
                              'spotifyPlaylistToCreate': {
-                                 title: playlistTitle
+                                 title: playlistTitle,
+                                 tracks: tracks // Store the full track list
                              },
-                             'isTuneTransporterAction': true
+                             'isTuneTransporterAction': true,
+                             'currentTrackIndex': 0 // Start with the first track
                          }, async () => {
                              if (chrome.runtime.lastError) {
                                  console.error("Error setting data in storage:", chrome.runtime.lastError);
