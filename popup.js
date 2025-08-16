@@ -381,8 +381,29 @@ document.addEventListener('DOMContentLoaded', function () {
                      const trackListString = tracks.map(t => `${t.title} - ${t.artist}`).join('\n');
                      const formattedList = `${playlistTitle}\n\n${trackListString}`;
                      await navigator.clipboard.writeText(formattedList);
-                     showStatus(`Copied "${playlistTitle}" (${tracks.length} total tracks)!`);
-                     console.log(`Copied "${playlistTitle}" (${tracks.length} total tracks) from YTM playlist to clipboard.`);
+                     showStatus(`Copied "${playlistTitle}" (${tracks.length} tracks)!`);
+                     console.log(`Copied "${playlistTitle}" (${tracks.length} tracks) from YTM playlist to clipboard.`);
+ 
+                     // Ask user if they want to transfer to Spotify
+                     if (confirm(`Copied "${playlistTitle}" (${tracks.length} tracks). Also transfer this playlist to Spotify?`)) {
+                         showStatus("Redirecting to Spotify to create playlist...", 0);
+                         
+                         // Store data for the content script to read on the new page
+                         chrome.storage.local.set({
+                             'spotifyPlaylistToCreate': {
+                                 title: playlistTitle
+                             },
+                             'isTuneTransporterAction': true
+                         }, async () => {
+                             if (chrome.runtime.lastError) {
+                                 console.error("Error setting data in storage:", chrome.runtime.lastError);
+                                 showStatus("Error preparing for redirection.", 4000);
+                                 return;
+                             }
+                             // Redirect the current tab
+                             await chrome.tabs.update(tabId, { url: "https://open.spotify.com/" });
+                         });
+                     }
                  } else {
                       showStatus("No tracks found or extracted from YTM playlist.");
                       console.log("YTM playlist extraction script ran successfully but found 0 tracks.");
@@ -409,10 +430,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     }
-
-    // Handle Create YTM PLAYLIST Button Click - REMOVED as process is now automatic
-
-    // Load toggle settings
+ 
+     // Handle Create YTM PLAYLIST Button Click - REMOVED as process is now automatic
+ 
+     // Load toggle settings
     chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], function (data) {
         spotifyToggle.checked = data.spotifyEnabled !== false;
         ytmToggle.checked = data.ytmEnabled !== false;
