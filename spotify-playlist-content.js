@@ -1,200 +1,415 @@
 // TuneTransporter/spotify-playlist-content.js
-// This script will handle the automated creation and renaming of Spotify playlists.
+// This script handles the automated creation, renaming, and population of Spotify playlists.
 
-console.log("TuneTransporter (Spotify): Playlist content script loaded.");
+// --- CONFIGURATION ---
+
+const SETTINGS = {
+    timeouts: {
+        default: 10000,
+        short: 3000,
+        long: 15000,
+    },
+    delays: {
+        short: 500,
+        medium: 1000,
+        long: 3000,
+    }
+};
+
+const SELECTORS = {
+    // Buttons
+    createButton: 'button[aria-label="Create"]',
+    createPlaylistMenuItem: '#listrow-title-global-create-playlist',
+    moreOptionsButton: 'button[data-testid="more-button"]',
+    saveButton: 'button[data-testid="playlist-edit-details-save-button"]',
+    
+    // Inputs
+    playlistNameInput: 'input[data-testid="playlist-edit-details-name-input"]',
+    playlistDescriptionInput: 'textarea[data-testid="playlist-edit-details-description-input"]',
+    playlistSearchInput: 'input[placeholder="Find a playlist"]',
+
+    // Links & Containers
+    firstTrackLink: 'div[data-testid="track-list"] a[data-testid="internal-track-link"]',
+
+    // Dynamic selectors (require formatting)
+    editDetailsButton: (playlistName) => `button[aria-label="${playlistName} – Edit details"]`,
+};
 
 // --- UTILITY FUNCTIONS ---
 
 /**
- * Waits for a specific element to appear in the DOM.
- * @param {string} selector - The CSS selector of the element.
- * @param {number} timeout - The maximum time to wait in milliseconds.
- * @returns {Promise<Element|null>} A promise that resolves with the element or null if not found.
+ * Standardized logging for the script.
+ * @param {...any} args - Arguments to log.
  */
-function waitForElement(selector, timeout = 10000) {
+const log = (...args) => console.log("TuneTransporter (Spotify):", ...args);
+
+/**
+ * Standardized warning for the script.
+ * @param {...any} args - Arguments to log as warnings.
+ */
+const warn = (...args) => console.warn("TuneTransporter (Spotify):", ...args);
+
+/**
+ * Standardized error for the script.
+ * @param {...any} args - Arguments to log as errors.
+ */
+const error = (...args) => console.error("TuneTransporter (Spotify):", ...args);
+
+
+/**
+ * Pauses execution for a specified duration.
+ * @param {number} ms - The number of milliseconds to wait.
+ * @returns {Promise<void>}
+ */
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Checks if an element is currently visible in the viewport and not hidden by styles.
+ * @param {Element} el - The element to check.
+ * @returns {boolean} True if the element is visible.
+ */
+function isElementVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        parseFloat(style.opacity) > 0 &&
+        rect.width > 0 &&
+        rect.height > 0
+    );
+}
+
+/**
+ * A robust utility to wait for a DOM element based on various conditions.
+ * @param {Object} options - The options for finding the element.
+ * @param {string} [options.selector] - The CSS selector to find.
+ * @param {string} [options.text] - Text content to find within an element.
+ * @param {boolean} [options.disappear=false] - If true, waits for the element to disappear.
+ * @param {number} [options.timeout=SETTINGS.timeouts.default] - The maximum time to wait.
+ * @returns {Promise<Element|null|boolean>} The found element, null if timed out, or boolean for disappear.
+ */
+function waitForElement({ selector, text, disappear = false, timeout = SETTINGS.timeouts.default }) {
     return new Promise(resolve => {
-        if (document.querySelector(selector)) {
-            return resolve(document.querySelector(selector));
-        }
-        const observer = new MutationObserver(mutations => {
-            if (document.querySelector(selector)) {
-                resolve(document.querySelector(selector));
-                observer.disconnect();
+        let timeoutId = null;
+
+        const checkCondition = () => {
+            let element = selector ? document.querySelector(selector) : null;
+            if (text) {
+                const lowerCaseText = text.toLowerCase();
+                // Expanded the list of tags to search within for better compatibility.
+                element = Array.from(document.querySelectorAll('span, div, p, h1, h2, button, mark, li, a'))
+                               .find(el => el.textContent.trim().toLowerCase().includes(lowerCaseText) && isElementVisible(el));
             }
-        });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        setTimeout(() => {
+
+            if (disappear) {
+                if (!element || !isElementVisible(element)) {
+                    cleanup();
+                    resolve(true);
+                }
+            } else {
+                if (element && isElementVisible(element)) {
+                    cleanup();
+                    resolve(element);
+                }
+            }
+        };
+
+        const observer = new MutationObserver(checkCondition);
+
+        const cleanup = () => {
             observer.disconnect();
-            resolve(null);
+            clearTimeout(timeoutId);
+        };
+
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+        timeoutId = setTimeout(() => {
+            cleanup();
+            const message = `Timed out waiting for element (${selector || `text: "${text}"`}) ${disappear ? 'to disappear' : 'to appear'}.`;
+            warn(message);
+            resolve(disappear ? false : null);
         }, timeout);
+
+        checkCondition(); // Initial check
     });
 }
 
 /**
- * Finds an element containing specific text.
- * @param {string} tag - The tag of the element to search for (e.g., 'button', 'span').
- * @param {string} text - The text content to match.
- * @returns {Element|null} The found element or null.
+ * Simulates a user input event on a field.
+ * @param {HTMLInputElement|HTMLTextAreaElement} element - The input element.
+ * @param {string} value - The value to set.
  */
-function getElementByText(tag, text) {
-    return Array.from(document.querySelectorAll(tag)).find(el => el.textContent.trim() === text);
+function simulateUserInput(element, value) {
+    element.value = value;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
 }
+
+
+// --- CHROME STORAGE HELPERS ---
+
+/**
+ * Retrieves the current state from chrome.storage.local.
+ * @returns {Promise<object>} A promise that resolves with the stored data.
+ */
+const getStorageState = () => new Promise(resolve => {
+    chrome.storage.local.get(['isTuneTransporterAction', 'spotifyPlaylistToCreate', 'spotifyAction', 'currentTrackIndex'], resolve);
+});
+
+/**
+ * Clears all script-related data from chrome.storage.local.
+ */
+const clearStorageState = () => {
+    log("Clearing script state from storage.");
+    chrome.storage.local.remove(['isTuneTransporterAction', 'spotifyPlaylistToCreate', 'spotifyAction', 'currentTrackIndex']);
+};
 
 // --- CORE LOGIC ---
 
 /**
- * Clicks the "Create Playlist" button on Spotify.
+ * Clicks the "Create Playlist" button sequence.
  */
 async function createNewPlaylist() {
-    // 1. Click the main 'Create' button first to reveal the playlist option
-    const createButton = await waitForElement('button[aria-label="Create"]');
-    if (!createButton) {
-        console.error("TuneTransporter: Main 'Create' button not found.");
-        return false;
-    }
+    log("Attempting to create a new playlist...");
+    const createButton = await waitForElement({ selector: SELECTORS.createButton });
+    if (!createButton) return error("Main 'Create' button not found.");
+    
     createButton.click();
-    console.log("TuneTransporter: Clicked main 'Create' button.");
+    log("Clicked main 'Create' button.");
+    await sleep(SETTINGS.delays.short);
 
-    // Brief delay to allow the next menu item to appear
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const menuItem = await waitForElement({ selector: SELECTORS.createPlaylistMenuItem });
+    const parentButton = menuItem?.closest('button');
+    if (!parentButton) return error("'Create a new playlist' menu item not found.");
 
-    // 2. Find the "Playlist" menu item by its specific ID and then find the parent button
-    const playlistTitleElement = await waitForElement('#listrow-title-global-create-playlist');
-    if (playlistTitleElement) {
-        const createPlaylistMenuItem = playlistTitleElement.closest('button');
-        if (createPlaylistMenuItem) {
-            createPlaylistMenuItem.click();
-            console.log("TuneTransporter: Clicked 'Create a new playlist' menu item.");
-            return true;
-        }
-    }
-
-    console.error("TuneTransporter: 'Create a new playlist' menu item not found.");
-    return false;
+    parentButton.click();
+    log("Clicked 'Create a new playlist' menu item.");
+    return true;
 }
 
 /**
  * Renames a newly created Spotify playlist.
- * @param {string} newTitle - The desired new title for the playlist.
+ * @param {string} newTitle - The desired new title.
  */
 async function renamePlaylist(newTitle) {
-    // 1. Get the default playlist name from the page title
-    await waitForElement('h1'); // Wait for the page to likely be loaded
+    log(`Attempting to rename playlist to "${newTitle}"...`);
+
+    // Wait for the page title to reflect the new (default) playlist
+    await waitForElement({ text: "My Playlist #" });
+
     const pageTitle = document.title;
-    const titleParts = pageTitle.split(' - playlist by ');
-    if (titleParts.length < 1) {
-        console.error("TuneTransporter: Could not parse playlist name from page title:", pageTitle);
-        return;
-    }
-    const defaultName = titleParts[0].trim();
-    console.log(`TuneTransporter: Detected default playlist name from page title: "${defaultName}"`);
+    const defaultName = pageTitle.split(' - playlist by ')[0].trim();
+    log(`Detected default playlist name: "${defaultName}"`);
 
-    // 2. Try to click the edit button directly (Primary Method)
-    let editButton = await waitForElement(`button[aria-label="${defaultName} – Edit details"]`, 2000); // Shorter timeout
+    const moreOptionsButton = await waitForElement({ selector: SELECTORS.moreOptionsButton });
+    if (!moreOptionsButton) return error("'More options' button not found for renaming.");
+    
+    moreOptionsButton.click();
+    log("Clicked 'More options' button.");
 
-    if (editButton) {
-        console.log("TuneTransporter: Found edit button via primary method.");
-        editButton.click();
-    } else {
-        // Fallback Method: Use the 'More options' menu
-        console.log("TuneTransporter: Primary edit button not found. Trying fallback method...");
-        const moreOptionsButton = await waitForElement(`button[data-testid="more-button"]`);
-        if (!moreOptionsButton) {
-            console.error("TuneTransporter: 'More options' button not found for fallback.");
-            return;
-        }
-        moreOptionsButton.click();
-        console.log("TuneTransporter: Clicked 'More options' button.");
+    const editDetailsMenuItem = await waitForElement({ text: "Edit details" });
+    const parentButton = editDetailsMenuItem?.closest('button');
+    if (!parentButton) return error("'Edit details' menu item not found.");
+    
+    parentButton.click();
+    log("Clicked 'Edit details' menu item.");
+    
+    const nameInput = await waitForElement({ selector: SELECTORS.playlistNameInput });
+    if (!nameInput) return error("Playlist name input field not found in popup.");
+    
+    simulateUserInput(nameInput, newTitle);
+    log(`Entered new playlist name: "${newTitle}"`);
 
-        // Wait for the "Edit details" menu item to appear
-        const editDetailsMenuItem = await waitForElement('button span:contains("Edit details")', 3000);
-        if (editDetailsMenuItem) {
-             const parentButton = editDetailsMenuItem.closest('button');
-             if(parentButton) {
-                parentButton.click();
-                console.log("TuneTransporter: Clicked 'Edit details' from context menu.");
-             } else {
-                console.error("TuneTransporter: Could not find parent button for 'Edit details' menu item.");
-                return;
-             }
-        } else {
-            console.error("TuneTransporter: 'Edit details' menu item not found in context menu.");
-            return;
-        }
+    const descriptionInput = await waitForElement({ selector: SELECTORS.playlistDescriptionInput, timeout: SETTINGS.timeouts.short });
+    if (descriptionInput) {
+        simulateUserInput(descriptionInput, `Playlist created by TuneTransporter. Original title: ${newTitle}`);
+        log("Entered playlist description.");
     }
     
-    console.log("TuneTransporter: Proceeding to edit playlist name.");
-
-    // 3. Wait for the edit details popup and get the input field
-    const nameInput = await waitForElement('input[data-testid="playlist-edit-details-name-input"]');
-    if (!nameInput) {
-        console.error("TuneTransporter: Playlist name input field not found in popup.");
-        return;
-    }
-    console.log("TuneTransporter: Found name input field.");
-
-    // 4. Enter the new playlist title and description
-    nameInput.value = newTitle;
-    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
-    console.log(`TuneTransporter: Entered new playlist name: "${newTitle}"`);
-
-    const descriptionInput = await waitForElement('textarea[data-testid="playlist-edit-details-description-input"]');
-    if (descriptionInput) {
-        descriptionInput.value = newTitle;
-        descriptionInput.dispatchEvent(new Event('input', { bubbles: true }));
-        console.log(`TuneTransporter: Entered new playlist description: "${newTitle}"`);
-    } else {
-        console.log("TuneTransporter: Description input field not found (optional).");
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 200)); // Short delay for UI update
-
-    // 5. Click the Save button
-    const saveButton = await waitForElement('button[data-testid="playlist-edit-details-save-button"]');
-    if (!saveButton) {
-        console.error("TuneTransporter: Save button not found in popup.");
-        return;
-    }
+    const saveButton = await waitForElement({ selector: SELECTORS.saveButton });
+    if (!saveButton) return error("Save button not found in popup.");
+    
     saveButton.click();
-    console.log("TuneTransporter: Clicked save button.");
+    log("Playlist renamed successfully.");
+    return true;
 }
 
 /**
- * Main function to orchestrate the playlist creation and renaming process.
+ * Adds the current track on the page to a specified playlist.
+ * @param {string} playlistName - The name of the playlist to add the track to.
  */
-async function orchestratePlaylistCreation() {
-    chrome.storage.local.get(['isTuneTransporterAction', 'spotifyPlaylistToCreate'], async (data) => {
-        if (chrome.runtime.lastError) {
-            console.error("TuneTransporter: Error getting data from storage:", chrome.runtime.lastError);
-            return;
-        }
+async function addTrackToPlaylist(playlistName) {
+    log(`Adding track to playlist "${playlistName}"...`);
 
-        if (data.isTuneTransporterAction && data.spotifyPlaylistToCreate?.title) {
-            console.log(`TuneTransporter: Detected action to create playlist: "${data.spotifyPlaylistToCreate.title}"`);
-            
-            // Clean up storage immediately to prevent re-running
-            chrome.storage.local.remove(['isTuneTransporterAction', 'spotifyPlaylistToCreate'], () => {
-                console.log("TuneTransporter: Cleared action flags from storage.");
-            });
+    const moreOptionsButton = await waitForElement({ selector: SELECTORS.moreOptionsButton });
+    if (!moreOptionsButton) return error("'More options' button for the track not found.");
+    
+    moreOptionsButton.click();
+    log("Clicked track 'More options'.");
+    // Removed redundant sleep; waitForElement will handle waiting for the menu item to appear.
 
-            // Proceed with automation
-            const creationSuccess = await createNewPlaylist();
-            if (creationSuccess) {
-                // Wait for navigation and elements to appear on the new playlist page
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                await renamePlaylist(data.spotifyPlaylistToCreate.title);
-            } else {
-                console.error("TuneTransporter: Failed to initiate playlist creation.");
-            }
-        } else {
-            console.log("TuneTransporter: No pending action found in storage.");
-        }
+    const addToPlaylistButton = (await waitForElement({ text: 'Add to playlist' }))?.closest('button');
+    if (!addToPlaylistButton) return error("'Add to playlist' menu item not found.");
+    
+    addToPlaylistButton.click();
+    log("Clicked 'Add to playlist'.");
+
+    const searchInput = await waitForElement({ selector: SELECTORS.playlistSearchInput });
+    if (!searchInput) return error("'Find a playlist' search input not found.");
+    
+    simulateUserInput(searchInput, playlistName);
+    log(`Searched for playlist "${playlistName}".`);
+    await sleep(SETTINGS.delays.medium); // Wait for search results
+
+    const playlistButton = (await waitForElement({ text: playlistName, selector: 'mark' }))?.closest('button');
+    if (!playlistButton) return error(`Playlist "${playlistName}" not found in search results.`);
+    
+    playlistButton.click();
+    log(`Successfully added track to "${playlistName}".`);
+    return true;
+}
+
+/**
+ * On a search results page, finds the first track and clicks it.
+ */
+async function handleSearchPageAndNavigate() {
+    log("Handling search results page.");
+    const firstTrackLink = await waitForElement({ selector: SELECTORS.firstTrackLink });
+    
+    if (firstTrackLink) {
+        log("Found first track link, navigating...");
+        // The click will trigger a navigation. The orchestrator will handle the state change on the new page.
+        firstTrackLink.click();
+        return true;
+    } else {
+        error("Could not find the first track on the search page. Skipping.");
+        return false;
+    }
+}
+
+/**
+ * Processes the next track in the list stored in chrome.storage.
+ */
+async function processNextTrack() {
+    const state = await getStorageState();
+    const { spotifyPlaylistToCreate, currentTrackIndex } = state;
+
+    if (!spotifyPlaylistToCreate?.tracks) {
+        log("No tracks left to process. Finishing task.");
+        clearStorageState();
+        return;
+    }
+
+    const { tracks } = spotifyPlaylistToCreate;
+    const index = currentTrackIndex || 0;
+
+    if (index >= tracks.length) {
+        log("All tracks processed. Task complete.");
+        alert("TuneTransporter: Finished adding all songs to the playlist!");
+        clearStorageState();
+        return;
+    }
+
+    const track = tracks[index];
+    log(`Processing track ${index + 1}/${tracks.length}: ${track.title} - ${track.artist}`);
+
+    const searchQuery = `${track.title} ${track.artist}`;
+    const searchUrl = `https://open.spotify.com/search/${encodeURIComponent(searchQuery)}/tracks`;
+
+    await chrome.storage.local.set({
+        'currentTrackIndex': index + 1,
+        'spotifyAction': 'findTrack'
     });
+    
+    window.location.href = searchUrl;
+}
+
+// --- MAIN ORCHESTRATOR ---
+
+/**
+ * Main router function that decides what action to take based on the page and stored data.
+ */
+async function mainOrchestrator() {
+    const state = await getStorageState();
+    const { isTuneTransporterAction, spotifyPlaylistToCreate, spotifyAction } = state;
+    const url = window.location.href;
+
+    if (!isTuneTransporterAction || !url.startsWith("https://open.spotify.com/")) {
+        return log("No pending action for this page.");
+    }
+
+    try {
+        switch (spotifyAction) {
+            case undefined: // Initial action: create the playlist
+                log(`Starting action to create playlist: "${spotifyPlaylistToCreate.title}"`);
+                if (await createNewPlaylist()) {
+                    await sleep(SETTINGS.delays.long); // Wait for playlist page to load
+                    await renamePlaylist(spotifyPlaylistToCreate.title);
+                    await processNextTrack();
+                } else {
+                    throw new Error("Playlist creation failed.");
+                }
+                break;
+
+            case 'findTrack':
+                // If we're on a search page, our goal is to find and click the track link.
+                if (url.includes("/search/")) {
+                    if (!await handleSearchPageAndNavigate()) {
+                        // If we failed to find the track, skip it and process the next one.
+                        warn("Could not navigate to track. Skipping.");
+                        await processNextTrack();
+                    }
+                    // If successful, the click triggers navigation. The script on this page is done.
+                }
+                // If we're on a track page, it means the navigation from the search page was successful.
+                else if (url.includes("/track/")) {
+                    log("Successfully navigated to track page. Now adding to playlist.");
+                    // Now we perform the 'addTrack' logic.
+                    if (await addTrackToPlaylist(spotifyPlaylistToCreate.title)) {
+                        log("Waiting for confirmation toast...");
+                        await waitForElement({ text: "Added to", timeout: SETTINGS.timeouts.long });
+                        log("Confirmation received. Waiting for UI to settle before proceeding.");
+                        await waitForElement({ selector: SELECTORS.playlistSearchInput, disappear: true });
+                        await sleep(SETTINGS.delays.medium);
+                    } else {
+                        warn("Failed to add track. It will be skipped.");
+                    }
+                    // After the add attempt, move to the next track.
+                    await processNextTrack();
+                } else {
+                    warn(`In 'findTrack' action on an unexpected URL: ${url}. Skipping.`);
+                    await processNextTrack();
+                }
+                break;
+
+            case 'addTrack':
+                // This state is now mostly a fallback. The main logic flows through 'findTrack'.
+                if (url.includes("/track/")) {
+                    log("Executing 'addTrack' action as a fallback.");
+                     if (await addTrackToPlaylist(spotifyPlaylistToCreate.title)) {
+                        await waitForElement({ text: "Added to", timeout: SETTINGS.timeouts.long });
+                        await waitForElement({ selector: SELECTORS.playlistSearchInput, disappear: true });
+                    }
+                    await processNextTrack();
+                } else {
+                    warn(`In 'addTrack' action on an unexpected URL: ${url}. Skipping.`);
+                    await processNextTrack();
+                }
+                break;
+
+            default:
+                warn(`Inconsistent state or unexpected action: "${spotifyAction}". Attempting to recover.`);
+                await processNextTrack();
+                break;
+        }
+    } catch (err) {
+        error("A critical error occurred in the orchestrator:", err.message);
+        error("Aborting the process to prevent further issues.");
+        clearStorageState();
+        alert("TuneTransporter: An unexpected error occurred and the process had to be stopped. Please try again.");
+    }
 }
 
 // --- SCRIPT EXECUTION ---
-// Run the orchestration function when the script is loaded
-orchestratePlaylistCreation();
+mainOrchestrator();
