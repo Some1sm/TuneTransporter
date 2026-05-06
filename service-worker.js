@@ -4,22 +4,15 @@
 const RULE_ID_BLOCK_YTM = 1;
 const RULE_ID_BLOCK_SPOTIFY = 2;
 
-// Blocked resource types during redirect transit
 const BLOCKED_TYPES = ['image', 'media', 'font'];
-
-// Auto-expire timeout for blocking rules (safety net)
 const BLOCK_EXPIRE_MS = 30000;
-
-// Track auto-expire timers
 const blockTimers = {};
-
-// --- Resource blocking management ---
 
 /**
  * Enables blocking of heavy resources on a target domain.
- * Used during redirect transit to speed up page loads.
+ * Calls onDone when the rules are fully applied.
  */
-function enableBlocking(target) {
+function enableBlocking(target, onDone) {
     const ruleId = target === 'ytm' ? RULE_ID_BLOCK_YTM : RULE_ID_BLOCK_SPOTIFY;
     const domain = target === 'ytm' ? 'music.youtube.com' : 'open.spotify.com';
 
@@ -31,23 +24,19 @@ function enableBlocking(target) {
             action: { type: 'block' },
             condition: {
                 resourceTypes: BLOCKED_TYPES,
-                requestDomains: [domain]
+                initiatorDomains: [domain]
             }
         }]
     }, () => {
         console.log(`TuneTransporter: Blocking ${BLOCKED_TYPES.join('/')} on ${domain}`);
+        if (onDone) onDone();
     });
 
-    // Safety: auto-expire after 30s in case unblock message never arrives
     if (blockTimers[target]) clearTimeout(blockTimers[target]);
     blockTimers[target] = setTimeout(() => disableBlocking(target), BLOCK_EXPIRE_MS);
 }
 
-/**
- * Disables resource blocking on a target domain.
- * Called when the redirect chain is complete.
- */
-function disableBlocking(target) {
+function disableBlocking(target, onDone) {
     const ruleId = target === 'ytm' ? RULE_ID_BLOCK_YTM : RULE_ID_BLOCK_SPOTIFY;
     const domain = target === 'ytm' ? 'music.youtube.com' : 'open.spotify.com';
 
@@ -55,6 +44,7 @@ function disableBlocking(target) {
         removeRuleIds: [ruleId]
     }, () => {
         console.log(`TuneTransporter: Unblocked resources on ${domain}`);
+        if (onDone) onDone();
     });
 
     if (blockTimers[target]) {
@@ -63,19 +53,21 @@ function disableBlocking(target) {
     }
 }
 
-// --- Message listener for content scripts ---
+// --- Message listener ---
+// Returns true to keep the message channel open for async sendResponse
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'enableBlocking') {
-        enableBlocking(message.target);
-        sendResponse({ success: true });
-    } else if (message.action === 'disableBlocking') {
-        disableBlocking(message.target);
-        sendResponse({ success: true });
+        enableBlocking(message.target, () => sendResponse({ success: true }));
+        return true; // keep channel open for async callback
+    }
+    if (message.action === 'disableBlocking') {
+        disableBlocking(message.target, () => sendResponse({ success: true }));
+        return true;
     }
     return false;
 });
 
-// --- Setup defaults on install/update ---
+// --- Setup defaults on install ---
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('TuneTransporter: onInstalled -', details.reason);
 
@@ -91,7 +83,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         }
     });
 
-    // Clean up any stale blocking rules from previous sessions
+    // Clean up stale blocking rules
     chrome.declarativeNetRequest.updateSessionRules({
         removeRuleIds: [RULE_ID_BLOCK_YTM, RULE_ID_BLOCK_SPOTIFY]
     });
@@ -99,7 +91,6 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
     console.log('TuneTransporter: Browser startup.');
-    // Clean up any stale blocking rules
     chrome.declarativeNetRequest.updateSessionRules({
         removeRuleIds: [RULE_ID_BLOCK_YTM, RULE_ID_BLOCK_SPOTIFY]
     });

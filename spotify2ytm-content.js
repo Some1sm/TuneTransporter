@@ -173,12 +173,11 @@ function spotifyToYTM() {
                 const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}${spFilter}`;
                 console.log(`TuneTransporter: Redirecting to YTM search (filter: ${pageType}): ${youtubeMusicSearchUrl}`);
 
-                // Block images/media on destination before redirecting
-                chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'ytm' });
-
-                // Set autoclick flag so the YTM search page script navigates to first result
-                chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
-                    window.location.href = youtubeMusicSearchUrl;
+                // Block images/media on destination, wait for confirmation, then navigate
+                chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'ytm' }, () => {
+                    chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
+                        window.location.href = youtubeMusicSearchUrl;
+                    });
                 });
                 return;
             }
