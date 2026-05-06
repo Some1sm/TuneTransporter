@@ -6,33 +6,45 @@ This document explains every file, function, and component in the extension.
 
 ## Architecture Overview
 
-TuneTransporter is a Chrome Manifest V3 extension that **automatically redirects** music links between Spotify and YouTube Music. When a user opens a Spotify track/album/artist page, the extension redirects them to a YouTube Music search. When they open a YTM song/playlist/artist page, it redirects to a Spotify search.
+TuneTransporter is a Chrome Manifest V3 extension that **automatically redirects** music links between Spotify and YouTube Music, then **navigates directly to the best match**.
 
-The extension follows this flow:
+### Redirection Flow
 
 ```
 User visits Spotify/YTM page
         ↓
-Content script runs (if enabled via toggle)
+Content script extracts artist + track/album info (title regex → DOM fallback)
         ↓
-Extracts artist + track/album info from page title or DOM
+Builds a search URL with type filter (e.g. &sp=EgWKAQIIAWgB for Songs)
         ↓
-Builds a search URL for the other service
+Sets autoclick signal in chrome.storage.local
         ↓
-Redirects the browser (window.location.href)
+Redirects to filtered search page
+        ↓
+Autoclick script waits for results to load, then navigates to first result
+        ↓
+No-redirect flag prevents the destination page from redirecting back
 ```
 
-For YTM watch pages specifically, there's an additional fallback path:
+### YTM Watch Page Fallback
 
 ```
 YTM watch page → MutationObserver tries to extract info
-        ↓ (if it fails/times out)
+        ↓ (if it fails/times out after 10s)
 Redirects to www.youtube.com/watch with #tunetransporter-fallback hash
         ↓
-yt-fallback-content.js picks up the hash, extracts from YT page instead
+yt-fallback-content.js extracts from YouTube page instead
         ↓
 Redirects to Spotify search
 ```
+
+### Storage Signals
+
+| Key | Purpose | Lifetime |
+|---|---|---|
+| `spotifyEnabled` / `ytmEnabled` | User toggle states | Persistent |
+| `tunetransporterAutoclick` | Timestamp signal to trigger auto-click on search pages | Consumed immediately, expires after 30s |
+| `tunetransporterNoRedirect` | Timestamp flag to prevent redirect loops at final destination | Consumed immediately, expires after 30s |
 
 ---
 
@@ -40,290 +52,165 @@ Redirects to Spotify search
 
 ### `manifest.json`
 
-The Chrome extension manifest (Manifest V3). Defines:
+Chrome extension manifest (Manifest V3).
 
 | Field | Purpose |
 |---|---|
-| `manifest_version` | Set to `3` (required for modern Chrome extensions) |
-| `name` / `version` / `description` | Extension metadata shown in `chrome://extensions` |
-| `icons` | Extension icons at 16/32/48/128px sizes (JPEG) |
-| `permissions` → `storage` | Allows reading/writing toggle state via `chrome.storage.local` |
-| `host_permissions` | Grants content script + redirect access to `open.spotify.com`, `music.youtube.com`, and `www.youtube.com` |
-| `action.default_popup` | Points to `popup.html` — the UI shown when clicking the extension icon |
-| `background.service_worker` | Points to `service-worker.js` — runs in the background |
-| `content_scripts` | Four content script entries (see below) |
+| `manifest_version` | `3` (required for modern Chrome extensions) |
+| `name` / `version` / `description` | Extension metadata |
+| `icons` | Extension icons at 16/32/48/128px |
+| `permissions` → `storage` | Toggle states and inter-script signals via `chrome.storage.local` |
+| `host_permissions` | Content script access to Spotify, YouTube Music, and YouTube |
+| `action.default_popup` | Points to `popup.html` |
+| `background.service_worker` | Points to `service-worker.js` |
+| `content_scripts` | Five content script entries (see below) |
 
 **Content script entries:**
 
-1. **Spotify pages** (`/track/*`, `/album/*`, `/artist/*`) → loads `utils.js` + `spotify2ytm-content.js`
-2. **YTM pages** (`/watch*`, `/playlist?list=*`, `/channel/*`) → loads `utils.js` + `ytm2spotify-content.js`
-3. **YouTube fallback** (`www.youtube.com/watch*`) → loads `yt-fallback-content.js`
-4. **YTM search pages** (`/search*`) → loads `ytm-autoclick-content.js`
+1. **Spotify pages** (`/track/*`, `/album/*`, `/artist/*`) → `utils.js` + `spotify2ytm-content.js`
+2. **YTM pages** (`/watch*`, `/playlist?list=*`, `/channel/*`) → `utils.js` + `ytm2spotify-content.js`
+3. **YouTube fallback** (`www.youtube.com/watch*`) → `yt-fallback-content.js`
+4. **YTM search** (`music.youtube.com/search*`) → `ytm-autoclick-content.js`
+5. **Spotify search** (`open.spotify.com/search/*`) → `spotify-autoclick-content.js`
 
-All content scripts use `"run_at": "document_idle"` so they execute after the page DOM is ready.
+All use `"run_at": "document_idle"`.
 
 ---
 
 ### `service-worker.js`
 
-The background service worker. Runs once when the extension is installed/updated and on browser startup.
+Background service worker. Initializes default toggle states on first install.
 
-#### `chrome.runtime.onInstalled` listener
-
-- Fires on first install, extension update, or Chrome update.
-- Reads `spotifyEnabled` and `ytmEnabled` from `chrome.storage.local`.
-- If either key is `undefined` (first install), initializes it to `true` so both redirect directions are enabled by default.
-
-#### `chrome.runtime.onStartup` listener
-
-- Fires every time the browser starts.
-- Currently just logs a message. Useful as a hook for future startup logic.
+- **`onInstalled`**: Sets `spotifyEnabled` and `ytmEnabled` to `true` if not already set.
+- **`onStartup`**: Logs browser startup (hook for future logic).
 
 ---
 
 ### `utils.js`
 
-Shared utility functions loaded by both `spotify2ytm-content.js` and `ytm2spotify-content.js` as a dependency (listed first in `manifest.json` content script `js` arrays).
+Shared utilities loaded by `spotify2ytm-content.js` and `ytm2spotify-content.js`.
 
-#### `showFeedback(message, duration = 5000)`
+#### `showFeedback(message, duration)`
 
-Displays a temporary floating notification overlay on the page when something goes wrong (e.g., extraction failed).
-
-- Creates a `<div>` with id `tunetransporter-feedback`, styled as a fixed-position toast in the top-right corner (light red background, dark red text).
-- Fades in via CSS `opacity` transition.
-- Auto-removes after `duration` ms with a fade-out animation.
-- Clicking the notification dismisses it early.
-- If called again while a previous notification is visible, the old one is removed first.
+Displays a temporary toast notification (top-right, light red) when extraction fails. Auto-fades after `duration` ms. Click to dismiss early.
 
 #### `processArtistString(artistString)`
 
-Cleans and normalizes a raw artist string extracted from a page.
-
-**Processing steps:**
-
-1. **Trim** — removes leading/trailing whitespace.
-2. **Bullet separator** — if the string contains `•` (common in YTM metadata like `"Artist • Album • Year"`), takes only the part before the first bullet.
-3. **Replacement character** — same handling for the `�` character.
-4. **Collaboration splitting** — splits on commas (`,`), ampersands (`&`), and keywords (`feat`, `ft`, `with`, `vs`) to separate multiple artists.
-5. **Join** — joins all extracted artist names with spaces to form a search-friendly string.
-6. **Returns** the cleaned string, or `null` if the input was empty/invalid.
+Cleans raw artist text:
+1. Strips YTM bullet-point metadata (e.g. `"Artist • Album • 2024"` → `"Artist"`)
+2. Splits on collaboration separators (`,`, `&`, `feat.`, `ft.`, `with`, `vs.`)
+3. Returns cleaned artist name(s) joined by space, or `null`
 
 ---
 
 ### `spotify2ytm-content.js`
 
-Content script injected on Spotify track, album, and artist pages. Handles the **Spotify → YouTube Music** redirection direction.
+Handles **Spotify → YouTube Music** redirection.
 
 #### Constants
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `SPOTIFY_MAX_RETRIES` | `15` | Maximum extraction attempts (7.5s total) |
+| `SPOTIFY_MAX_RETRIES` | `15` | Max extraction attempts (7.5s window) |
 | `SPOTIFY_RETRY_DELAY_MS` | `500` | Delay between retries |
-| `SPOTIFY_INITIAL_DELAY_MS` | `300` | Initial wait before first attempt |
+| `SPOTIFY_INITIAL_DELAY_MS` | `300` | Wait before first attempt |
 
 #### `spotifyToYTM()`
 
-The main extraction and redirect function. Uses a **retry mechanism** to handle Spotify's SPA dynamic loading — the page title and DOM elements may not be available immediately. Retries up to `SPOTIFY_MAX_RETRIES` times, checking both title regex and DOM queries each attempt.
+Detects page type from `pathname` and sets `pageType` (`track`, `album`, `artist`).
 
-Detects the page type from `window.location.pathname` and sets `pageType` (`'track'`, `'album'`, or `'artist'`) for use in YTM search filtering.
-
-**For each page type, uses a two-tier extraction strategy:**
+**Two-tier extraction per page type:**
 
 | Page Type | Plan A (Title Regex) | Plan B (DOM Query) |
 |---|---|---|
-| `/track/` | Parses `document.title` with regex: `^(.+?) [-–—] (?:song\|lyrics).*?by (.+?) (?:\| Spotify)?$` | Queries `span[data-testid="entityTitle"] h1` for title and `a[data-testid="creator-link"]` for artist |
-| `/album/` | Parses `document.title` with regex: `^(.+?) [-–—] (?:album\|single) by (.+?) (?:\| Spotify)?$` | Same DOM selectors as track |
-| `/artist/` | Parses `document.title` with regex: `^(.+?) (?:•.*?)? (?:\| Spotify\|- Listen on Spotify)$` | Queries `span[data-testid="entityTitle"] h1` for artist name |
+| `/track/` | `^(.+?) [-–—] (?:song\|lyrics) by (.+?) (?:\| Spotify)?$` | `span[data-testid="entityTitle"] h1` + `a[data-testid="creator-link"]` |
+| `/album/` | `^(.+?) [-–—] (?:album\|single) by (.+?) (?:\| Spotify)?$` | Same selectors as track |
+| `/artist/` | `^(.+?) (?:•.*?)? (?:\| Spotify\|- Listen on Spotify)$` | `span[data-testid="entityTitle"] h1` |
 
-Plan A (title regex) runs first because `document.title` is available very early. Plan B (DOM query) is the fallback if the regex doesn't match. Both plans skip when the title is still the generic SPA title (`"Spotify – Web Player"`).
+Both plans skip the generic SPA title (`"Spotify – Web Player"`).
 
 **After extraction:**
-- Builds search query: `"trackName artistName"` for tracks/albums, or just `"artistName"` for artist pages.
-- Appends a **YTM search filter** (`sp` parameter) based on `pageType`:
-  - `track` → `sp=EgWKAQIIAWgB` (Songs filter)
-  - `album` → `sp=EgWKAQIYAWgB` (Albums filter)
-  - `artist` → `sp=EgWKAQIQAWgB` (Artists filter)
-- Appends `#tunetransporter-autoclick` hash to signal the auto-click script.
-- Constructs YouTube Music search URL: `https://music.youtube.com/search?q=<encoded query>&sp=<filter>#tunetransporter-autoclick`
-- Redirects via `window.location.href`.
-- If extraction fails on a given attempt, retries after `SPOTIFY_RETRY_DELAY_MS`. After all retries exhausted, calls `showFeedback()` to notify the user.
+- Appends YTM search filter (`sp` parameter): Songs / Albums / Artists
+- Sets `tunetransporterAutoclick` signal in storage
+- Redirects to `music.youtube.com/search?q=<query>&sp=<filter>`
 
-#### Main execution block (bottom of file)
-
-- Reads `spotifyEnabled` from `chrome.storage.local`.
-- If enabled (default), calls `spotifyToYTM()` which internally delays `SPOTIFY_INITIAL_DELAY_MS` before the first attempt.
-- If disabled, logs a message and does nothing.
-
----
-
-### `ytm-autoclick-content.js`
-
-Content script injected on YTM search pages (`/search*`). Auto-clicks the first search result when the URL hash is `#tunetransporter-autoclick` (set by `spotify2ytm-content.js` during redirection).
-
-#### Constants
-
-| Constant | Value | Purpose |
-|---|---|---|
-| `AUTOCLICK_MAX_RETRIES` | `20` | Maximum click attempts (10s total) |
-| `AUTOCLICK_RETRY_DELAY_MS` | `500` | Delay between retries |
-
-#### Main logic flow
-
-1. **Hash check**: If `window.location.hash !== '#tunetransporter-autoclick'`, does nothing.
-2. **Remove hash**: Immediately calls `history.replaceState()` to prevent re-triggering on refresh.
-3. **Retry loop** (`attemptAutoClick()`):
-   - **Strategy 1** — Top card: Queries `ytmusic-card-shelf-renderer a.yt-simple-endpoint` (the featured result card at the top of filtered results).
-   - **Strategy 2** — First list item: Queries `ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer a.yt-simple-endpoint`.
-   - **Strategy 3** — Broad fallback: Queries `ytmusic-responsive-list-item-renderer a.yt-simple-endpoint`.
-   - If a link is found, calls `.click()` to navigate into it.
-   - If nothing found, retries up to `AUTOCLICK_MAX_RETRIES` times.
+**Main execution block:** Checks `tunetransporterNoRedirect` flag before starting. If flag is set (recent), skips redirection.
 
 ---
 
 ### `ytm2spotify-content.js`
 
-Content script injected on YouTube Music watch, playlist, and channel pages. Handles the **YTM → Spotify** redirection direction.
+Handles **YouTube Music → Spotify** redirection.
 
-#### Constants
+#### Selectors
 
-| Constant | Value | Purpose |
-|---|---|---|
-| `YTM_OBSERVER_TIMEOUT_MS` | `10000` | Max time (10s) the MutationObserver will wait on watch pages before triggering fallback |
-| `YTM_PLAYLIST_TITLE_SELECTOR` | `ytmusic-responsive-header-renderer h1 yt-formatted-string.title` | CSS selector for playlist/album title |
-| `YTM_PLAYLIST_ARTIST_SELECTOR` | `ytmusic-responsive-header-renderer yt-formatted-string.strapline-text.complex-string` | CSS selector for playlist/album artist |
-| `YTM_ARTIST_NAME_SELECTOR` | `ytmusic-immersive-header-renderer h1 yt-formatted-string.title` | CSS selector for artist name on channel pages |
-| `YTM_WATCH_QUEUE_ITEM_SELECTOR` | `ytmusic-player-queue-item[selected]` | CSS selector for the currently playing item in the queue |
-| `YTM_WATCH_TITLE_SELECTOR` | (combined) `.song-title` within selected queue item | Song title on watch pages |
-| `YTM_WATCH_ARTIST_SELECTOR` | (combined) `.byline` within selected queue item | Artist on watch pages |
+| Selector | Used For |
+|---|---|
+| `ytmusic-responsive-header-renderer h1 yt-formatted-string.title` | Playlist/Album title |
+| `ytmusic-responsive-header-renderer yt-formatted-string.strapline-text` | Playlist/Album artist |
+| `ytmusic-immersive-header-renderer h1 yt-formatted-string.title` | Artist name |
+| `ytmusic-player-queue-item[selected] .song-title` | Watch page track title |
+| `ytmusic-player-queue-item[selected] .byline` | Watch page artist |
 
 #### `tryExtractAndRedirect()`
 
-Handles **non-watch pages** (playlist/album and artist/channel pages). These pages load their metadata more reliably so a direct DOM query works.
-
-- **Playlist/Album pages** (`/playlist?list=`): Queries title + artist elements, sets Spotify search filter to `/albums`.
-- **Artist/Channel pages** (`/channel/`): Queries artist name element, sets Spotify search filter to `/artists`.
-- Constructs Spotify search URL with type filter: `https://open.spotify.com/search/<query>/<type>`
-- Redirects via `window.location.href`.
+Handles playlist/album and artist pages. Sets `spotifySearchType` (`albums` or `artists`) and redirects to `open.spotify.com/search/<query>/<type>`.
 
 #### `initializeWatchPageObserver()`
 
-Handles **watch pages** (`/watch?v=...`). YTM watch pages load content dynamically, so a `MutationObserver` is used to wait for the song info to appear.
+Uses a `MutationObserver` on watch pages to wait for the selected queue item to render. Extracts track + artist, then redirects to Spotify search with `tracks` filter. Falls back to `www.youtube.com` if extraction fails after 10s timeout.
 
-**Flow:**
+**Main execution block:** Same no-redirect check as `spotify2ytm-content.js`.
 
-1. Sets a timeout (`YTM_OBSERVER_TIMEOUT_MS` = 10s). If the observer doesn't find data in time, triggers fallback.
-2. Creates a `MutationObserver` watching `document.body` for `childList`, `subtree`, and `attributes` changes (specifically `title` and `class` attributes).
-3. On each mutation, checks if `ytmusic-player-queue-item[selected] .song-title` and `.byline` exist and have content.
-4. **Success path**: Extracts track + artist, builds Spotify search URL with `/tracks` filter, redirects.
-5. **Failure path** (`triggerFallbackRedirect`): Changes `hostname` from `music.youtube.com` to `www.youtube.com` and appends `#tunetransporter-fallback` hash, then redirects. This hands off to `yt-fallback-content.js`.
-6. `cleanup()` disconnects the observer and clears the timeout to prevent duplicate actions.
+---
 
-#### Main execution block (bottom of file)
+### `ytm-autoclick-content.js`
 
-- Reads `ytmEnabled` from `chrome.storage.local`.
-- If enabled, after 200ms delay:
-  - Watch pages → calls `initializeWatchPageObserver()`.
-  - Other pages → calls `tryExtractAndRedirect()`.
-- If disabled, logs and does nothing.
+Runs on YTM search pages. Auto-navigates to the first result when the `tunetransporterAutoclick` signal is detected.
+
+#### Navigation strategies (tried in order)
+
+1. **Top card** — `ytmusic-card-shelf-renderer a.yt-simple-endpoint` (featured result)
+2. **First list item** — `ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer a.yt-simple-endpoint`
+3. **Any result** — `ytmusic-responsive-list-item-renderer a.yt-simple-endpoint`
+
+Sets `tunetransporterNoRedirect` before navigating to prevent `ytm2spotify-content.js` from redirecting back.
+
+Retries up to 20 times (10s window) to handle dynamic loading.
+
+---
+
+### `spotify-autoclick-content.js`
+
+Runs on Spotify search pages. Auto-navigates to the first result when the `tunetransporterAutoclick` signal is detected.
+
+#### Navigation strategies (tried in order)
+
+1. **Track result** — `[data-testid="tracklist-row"] a[href*="/track/"]`
+2. **Album result** — `a[href*="/album/"]`
+3. **Artist result** — `a[href*="/artist/"]`
+4. **Any music link** — `a[href*="/track/"], a[href*="/album/"], a[href*="/artist/"]`
+
+Sets `tunetransporterNoRedirect` before navigating to prevent `spotify2ytm-content.js` from redirecting back.
+
+Retries up to 20 times (10s window).
 
 ---
 
 ### `yt-fallback-content.js`
 
-Content script injected on `www.youtube.com/watch*` pages. Only activates when the URL hash is `#tunetransporter-fallback` (set by the YTM watch page observer on failure).
+Runs on `www.youtube.com/watch*`. Only activates when the URL hash is `#tunetransporter-fallback` (set by `ytm2spotify-content.js` when primary extraction fails).
 
-#### Constants
+Extracts video title from `document.title` and channel name from `#channel-name`, then redirects to Spotify search.
 
-| Constant | Value | Purpose |
-|---|---|---|
-| `MAX_RETRIES` | `5` | Maximum extraction attempts |
-| `RETRY_DELAY_MS` | `500` | Delay between retries |
-
-#### Main logic flow
-
-1. **Hash check**: If `window.location.hash !== '#tunetransporter-fallback'`, does nothing.
-2. **Remove hash**: Immediately calls `history.replaceState()` to remove the hash so refreshing won't re-trigger.
-3. **Setting check**: Reads `ytmEnabled` — if disabled, aborts (user turned off YTM→Spotify).
-4. **Retry loop** (`attemptExtraction()`):
-   - Extracts video title from `document.title`, cleaning off `"(N) "` notification prefix and `" - YouTube"` suffix.
-   - Skips if title is still just `"YouTube"` (page still loading).
-   - Extracts channel name from `#channel-name yt-formatted-string#text a` (link text) or falls back to the `title` attribute.
-   - If both title and channel name found → constructs `https://open.spotify.com/search/<title + channel>` and redirects.
-   - If either is missing, retries up to `MAX_RETRIES` times with `RETRY_DELAY_MS` between each.
+Retries up to 5 times (2.5s window).
 
 ---
 
-### `popup.html`
+### `popup.html` / `popup.js` / `popup.css`
 
-The popup UI shown when clicking the extension icon in the toolbar. Contains:
+The popup UI shown when clicking the extension icon.
 
-- **Title** (`<h1>TuneTransporter</h1>`).
-- **Two toggle labels**, each with:
-  - A service icon (`<img>` from `resources/`).
-  - A checkbox (`<input type="checkbox">`).
-  - Label text describing the direction.
-- Loads `popup.css` for styling and `popup.js` for logic.
-
----
-
-### `popup.js`
-
-Handles the popup toggle logic.
-
-#### `DOMContentLoaded` listener
-
-1. **Load state**: Reads `spotifyEnabled` and `ytmEnabled` from `chrome.storage.local` and sets checkbox states. Both default to `true` if not set.
-2. **Save state**: Adds `change` event listeners on both checkboxes to persist their state to `chrome.storage.local` immediately on toggle.
-
----
-
-### `popup.css`
-
-Styles for the popup UI.
-
-| Selector | Purpose |
-|---|---|
-| `body` | Fixed width (250px), sans-serif font, padding |
-| `h1` | Centered title, slightly larger font |
-| `label` | Flexbox row layout for icon + checkbox + text alignment |
-| `input[type="checkbox"]` | Right margin for spacing |
-| `.popup-icon` | 18×18px service icons with right margin |
-
----
-
-### `icons/`
-
-Extension icons in JPEG format at four sizes required by Chrome:
-
-| File | Size | Used for |
-|---|---|---|
-| `icon16.jpeg` | 16×16 | Favicon / toolbar (small) |
-| `icon32.jpeg` | 32×32 | Toolbar (retina) |
-| `icon48.jpeg` | 48×48 | Extensions management page |
-| `icon128.jpeg` | 128×128 | Chrome Web Store / install dialog |
-
----
-
-### `resources/`
-
-SVG icons used in the popup UI:
-
-| File | Purpose |
-|---|---|
-| `spotify_icon.svg` | Spotify logo shown next to the Spotify→YTM toggle |
-| `ytm_icon.svg` | YouTube Music logo shown next to the YTM→Spotify toggle |
-
----
-
-### `README.md`
-
-User-facing documentation: features, installation instructions, usage guide, supported pages, troubleshooting, permissions explanation, and limitations.
-
-### `CHANGELOG.md`
-
-Version history documenting changes, additions, and fixes across releases.
-
-### `LICENSE.txt`
-
-MIT License file.
+- Two toggle checkboxes with service icons: **Spotify → YTM** and **YTM → Spotify**
+- States saved to / loaded from `chrome.storage.local`
+- Minimal styling, 250px wide

@@ -1,141 +1,99 @@
-﻿// TuneTransporter/utils.js
+// TuneTransporter/utils.js
+// Shared utility functions for content scripts.
+// Include guard prevents re-declaration when injected multiple times.
 
-// Include guard to prevent re-declaration errors if injected multiple times
 if (typeof window.showFeedback === 'undefined') {
 
-    // Shared utility functions for TuneTransporter content scripts
-    let feedbackTimeoutId = null; // Keep track of the timeout for the feedback message
+    let feedbackTimeoutId = null;
 
     /**
-     * Displays a temporary feedback message overlay on the page.
-     * Removes any existing feedback message first.
-     * @param {string} message The text content of the feedback message.
-     * @param {number} [duration=5000] The duration in milliseconds before the message fades out.
+     * Displays a temporary feedback toast on the page.
+     * @param {string} message - The text to display.
+     * @param {number} [duration=5000] - How long the toast stays visible (ms).
      */
     function showFeedback(message, duration = 5000) {
-        // Remove any existing feedback message instantly
-        const existingFeedback = document.getElementById('tunetransporter-feedback');
-        if (existingFeedback) {
-            existingFeedback.remove();
+        const existing = document.getElementById('tunetransporter-feedback');
+        if (existing) {
+            existing.remove();
             if (feedbackTimeoutId) {
                 clearTimeout(feedbackTimeoutId);
                 feedbackTimeoutId = null;
             }
         }
 
-        // Create the feedback element
-        const feedbackDiv = document.createElement('div');
-        feedbackDiv.id = 'tunetransporter-feedback';
-        feedbackDiv.textContent = message;
+        const el = document.createElement('div');
+        el.id = 'tunetransporter-feedback';
+        el.textContent = message;
 
-        // Basic styling - feel free to customize
-        Object.assign(feedbackDiv.style, {
+        Object.assign(el.style, {
             position: 'fixed',
             top: '15px',
             right: '15px',
-            backgroundColor: 'rgba(255, 221, 221, 0.95)', // Light red background
-            color: '#8B0000', // Dark red text
+            backgroundColor: 'rgba(255, 221, 221, 0.95)',
+            color: '#8B0000',
             padding: '10px 15px',
             borderRadius: '5px',
-            zIndex: '99999', // Ensure it's on top
+            zIndex: '99999',
             fontSize: '14px',
             fontFamily: 'sans-serif',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-            opacity: '0', // Start hidden for fade-in
+            opacity: '0',
             transition: 'opacity 0.3s ease-in-out'
         });
 
-        // Add to page
-        document.body.appendChild(feedbackDiv);
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '1'; }, 10);
 
-        // Trigger fade-in after append (allows transition to work)
-        setTimeout(() => {
-            feedbackDiv.style.opacity = '1';
-        }, 10);
-
-
-        // Set timeout to fade out and remove
         feedbackTimeoutId = setTimeout(() => {
-            feedbackDiv.style.opacity = '0';
-            // Remove from DOM after fade-out completes
+            el.style.opacity = '0';
             setTimeout(() => {
-                // Check if element still exists in DOM before trying removal
-                if (document.getElementById('tunetransporter-feedback') === feedbackDiv) {
-                    document.body.removeChild(feedbackDiv);
+                if (document.getElementById('tunetransporter-feedback') === el) {
+                    document.body.removeChild(el);
                 }
                 feedbackTimeoutId = null;
-            }, 300); // Matches the transition duration
+            }, 300);
         }, duration);
 
-        // Optional: Allow clicking the message to dismiss it early
-        feedbackDiv.addEventListener('click', () => {
+        el.addEventListener('click', () => {
             if (feedbackTimeoutId) {
                 clearTimeout(feedbackTimeoutId);
                 feedbackTimeoutId = null;
             }
-            feedbackDiv.style.opacity = '0';
+            el.style.opacity = '0';
             setTimeout(() => {
-                // Check if element still exists in DOM before trying removal
-                if (document.getElementById('tunetransporter-feedback') === feedbackDiv) {
-                    document.body.removeChild(feedbackDiv);
+                if (document.getElementById('tunetransporter-feedback') === el) {
+                    document.body.removeChild(el);
                 }
             }, 300);
-        }, { once: true }); // Remove listener after first click
+        }, { once: true });
     }
 
-
     /**
-     * Processes a raw artist string to extract primary artist names.
-     * Handles common separators like commas, ampersands, "feat.", and YTM's bullet points.
-     * @param {string | null | undefined} artistString The raw artist string.
-     * @returns {string | null} The processed artist string (main artists joined by space), or null if input is invalid/empty.
+     * Extracts the primary artist name from a raw string.
+     * Strips YTM bullet-point metadata and splits on common separators
+     * (comma, ampersand, feat., ft., with, vs.).
+     * @param {string|null|undefined} artistString - Raw artist text.
+     * @returns {string|null} Cleaned artist name(s) joined by space, or null.
      */
     function processArtistString(artistString) {
-        if (!artistString || typeof artistString !== 'string') {
-            return null; // Return null for invalid input
-        }
+        if (!artistString || typeof artistString !== 'string') return null;
 
-        let primaryArtistPart = artistString.trim();
+        let primary = artistString.trim();
 
-        // 1. Handle YTM style separators (e.g., "Artist Name • Album • Year")
-        // Take only the part before the first bullet point if present.
-        if (primaryArtistPart.includes('•')) {
-            primaryArtistPart = primaryArtistPart.split('•')[0].trim();
-        }
-        // Add handling for the specific '�' character seen sometimes
-        if (primaryArtistPart.includes('�')) {
-            primaryArtistPart = primaryArtistPart.split('�')[0].trim();
-        }
+        // Strip YTM metadata after bullet points (e.g. "Artist • Album • 2024")
+        if (primary.includes('•')) primary = primary.split('•')[0].trim();
+        if (primary.includes('�')) primary = primary.split('�')[0].trim();
 
+        // Split on collaboration separators
+        const artists = primary.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
+        const cleaned = artists.map(a => a.trim()).filter(Boolean);
 
-        // 2. Handle common collaboration/separator patterns
-        // Splits by comma, ampersand, "feat.", "with", "vs." (case-insensitive)
-        // This regex looks for the separators surrounded by optional whitespace.
-        const artists = primaryArtistPart.split(/,\s*|\s*&\s*|\s+(?:feat|ft|with|vs)\.?\s+/i);
-
-        // 3. Clean up and join
-        // Trim whitespace from each resulting artist and filter out any empty strings.
-        const cleanedArtists = artists.map(artist => artist.trim()).filter(Boolean);
-
-        // 4. Return processed string or null
-        // Return the main artist(s) joined by a space, or null if none were found.
-        // Often, just taking the *first* artist after splitting is desired for search.
-        return cleanedArtists.length > 0 ? cleanedArtists.join(" ") : null; // Option: Join primary artists
+        return cleaned.length > 0 ? cleaned.join(' ') : null;
     }
 
-    /**
-     * Returns a promise that resolves after a specified number of milliseconds.
-     * @param {number} ms The number of milliseconds to wait.
-     * @returns {Promise<void>}
-     */
-    function delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // Mark utils as loaded
     window.tuneTransporterUtilsLoaded = true;
-    console.log("TuneTransporter utils.js loaded.");
+    console.log('TuneTransporter: utils.js loaded.');
 
 } else {
-    console.log("TuneTransporter utils.js already loaded, skipping re-injection.");
+    console.log('TuneTransporter: utils.js already loaded, skipping.');
 }
