@@ -2,9 +2,9 @@
 // NOTE: showFeedback and processArtistString functions are now loaded from utils.js
 
 // --- Constants ---
-const SPOTIFY_MAX_RETRIES = 15;       // Up to 15 attempts (7.5 seconds total)
-const SPOTIFY_RETRY_DELAY_MS = 500;   // 500ms between retries
-const SPOTIFY_INITIAL_DELAY_MS = 300; // Initial wait before first attempt
+const SPOTIFY_MAX_RETRIES = 15;
+const SPOTIFY_RETRY_DELAY_MS = 300;
+const SPOTIFY_INITIAL_DELAY_MS = 150;
 
 // --- Spotify Extraction and Redirection Logic ---
 function spotifyToYTM() {
@@ -173,7 +173,10 @@ function spotifyToYTM() {
                 const youtubeMusicSearchUrl = `https://music.youtube.com/search?q=${encodeURIComponent(searchQuery)}${spFilter}`;
                 console.log(`TuneTransporter: Redirecting to YTM search (filter: ${pageType}): ${youtubeMusicSearchUrl}`);
 
-                // Set autoclick flag in storage so the YTM search page script knows to click the first result
+                // Block images/media on destination before redirecting
+                chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'ytm' });
+
+                // Set autoclick flag so the YTM search page script navigates to first result
                 chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
                     window.location.href = youtubeMusicSearchUrl;
                 });
