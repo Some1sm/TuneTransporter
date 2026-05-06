@@ -105,11 +105,18 @@ function tryExtractAndRedirect() {
             }
 
             console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
-            // Block images/media on destination, wait for confirmation, then navigate
-            chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'spotify' }, () => {
-                chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
+            // Check autoclick setting to decide whether to block resources and auto-navigate
+            chrome.storage.local.get('autoclickEnabled', (autoclickData) => {
+                const doAutoclick = autoclickData.autoclickEnabled !== false;
+                if (doAutoclick) {
+                    chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'spotify' }, () => {
+                        chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
+                            window.location.href = spotifySearchUrl;
+                        });
+                    });
+                } else {
                     window.location.href = spotifySearchUrl;
-                });
+                }
             });
 
         } else if (extracted && !artistName) {
@@ -181,11 +188,18 @@ function initializeWatchPageObserver() {
                     console.log(`TuneTransporter: Preparing Spotify search with filter '${spotifySearchType}': "${searchQuery}"`);
 
                     console.log(`TuneTransporter: Redirecting to Spotify search: ${spotifySearchUrl}`);
-                    // Block images/media on destination, wait for confirmation, then navigate
-                    chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'spotify' }, () => {
-                        chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
+                    // Check autoclick setting to decide whether to block resources and auto-navigate
+                    chrome.storage.local.get('autoclickEnabled', (autoclickData) => {
+                        const doAutoclick = autoclickData.autoclickEnabled !== false;
+                        if (doAutoclick) {
+                            chrome.runtime.sendMessage({ action: 'enableBlocking', target: 'spotify' }, () => {
+                                chrome.storage.local.set({ tunetransporterAutoclick: Date.now() }, () => {
+                                    window.location.href = spotifySearchUrl;
+                                });
+                            });
+                        } else {
                             window.location.href = spotifySearchUrl;
-                        });
+                        }
                     });
                 } else {
                     console.warn("TuneTransporter: Watch observer - Names were empty after processing.");

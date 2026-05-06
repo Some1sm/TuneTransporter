@@ -120,10 +120,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('TuneTransporter: onInstalled -', details.reason);
 
-    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled'], (result) => {
+    chrome.storage.local.get(['spotifyEnabled', 'ytmEnabled', 'autoclickEnabled'], (result) => {
         const defaults = {};
         if (result.spotifyEnabled === undefined) defaults.spotifyEnabled = true;
         if (result.ytmEnabled === undefined) defaults.ytmEnabled = true;
+        if (result.autoclickEnabled === undefined) defaults.autoclickEnabled = true;
 
         if (Object.keys(defaults).length > 0) {
             chrome.storage.local.set(defaults, () => {

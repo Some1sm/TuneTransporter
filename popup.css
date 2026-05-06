@@ -20,6 +20,12 @@ label {
     cursor: pointer;
 }
 
+hr {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 8px 0;
+}
+
 input[type="checkbox"] {
     margin-right: 8px;
 }
