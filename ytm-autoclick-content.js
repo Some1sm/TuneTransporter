@@ -1,87 +1,83 @@
 // TuneTransporter/ytm-autoclick-content.js
+// Auto-navigates to the first search result on YTM when redirected from Spotify.
+// Activates when a recent autoclick flag is found in chrome.storage.local.
 
-// --- State Keys (borrowed from ytm-search-content.js for checking) ---
-const PROCESSING_FLAG_CHECK = 'tuneTransporterProcessing';
-const NEXT_STEP_FLAG_CHECK = 'tuneTransporterNextStep';
+console.log("TuneTransporter: YTM auto-click script loaded.");
 
+// --- Constants ---
+const AUTOCLICK_MAX_RETRIES = 20;      // Up to 20 attempts (10 seconds total)
+const AUTOCLICK_RETRY_DELAY_MS = 500;  // 500ms between retries
+const AUTOCLICK_SIGNAL_MAX_AGE_MS = 30000; // Signal valid for 30 seconds
 
-function handleYtmSearchResultRedirect() {
-    // --- Check if the multi-step process is active ---
-    const isProcessing = sessionStorage.getItem(PROCESSING_FLAG_CHECK) === 'true';
-    const nextStep = sessionStorage.getItem(NEXT_STEP_FLAG_CHECK);
+// Check for the autoclick signal in storage
+chrome.storage.local.get('tunetransporterAutoclick', (result) => {
+    const timestamp = result.tunetransporterAutoclick;
 
-    // If the library processing is active and expects to be on the search page,
-    // let ytm-search-content.js handle it. Don't auto-click.
-    if (isProcessing && nextStep === 'findSongOnSearchPage') {
-        console.log("TuneTransporter (YTM AutoClick): Multi-step process active ('findSongOnSearchPage'). Auto-click disabled for this page load.");
-        return; // Exit early
+    if (!timestamp) {
+        return;
     }
-    // --- End Check ---
 
-    const trackLinkSelector = 'ytmusic-card-shelf-renderer div.details-container yt-formatted-string.title a.yt-simple-endpoint[href^="watch?v="]';
-    const chevronButtonSelector = 'div.main-action-container yt-button-shape[icon-name="yt-sys-icons:chevron_right"] button.yt-spec-button-shape-next--icon-button';
+    const age = Date.now() - timestamp;
+    if (age > AUTOCLICK_SIGNAL_MAX_AGE_MS) {
+        console.log(`TuneTransporter: Auto-click signal is stale (${age}ms old). Ignoring.`);
+        chrome.storage.local.remove('tunetransporterAutoclick');
+        return;
+    }
 
-    const observerTargetNode = document.body; // Watch the whole body for simplicity
-    const observerConfig = { childList: true, subtree: true };
-    let observer = null; // Declare observer variable
-    let observerTimeout = null; // Declare timeout variable
+    console.log("TuneTransporter: Auto-click signal detected! Starting auto-navigate...");
+    chrome.storage.local.remove('tunetransporterAutoclick');
 
-    console.log("TuneTransporter (YTM AutoClick): Script loaded, starting observer for track link or chevron button...");
+    let currentRetry = 0;
+    let navDone = false;
 
-    const observerCallback = function(mutationsList, obs) {
-        // --- Priority 1: Check for Top Result Track Link ---
-        const trackLinkElement = document.querySelector(trackLinkSelector);
-        if (trackLinkElement) {
-            const relativeUrl = trackLinkElement.getAttribute('href');
-            if (relativeUrl && relativeUrl.startsWith('watch?v=')) {
-                const fullUrl = `https://music.youtube.com/${relativeUrl}`;
-                console.log(`TuneTransporter (YTM AutoClick): Found top result track link: ${fullUrl}. Navigating...`);
-                // Small delay might prevent race conditions with page scripts
-                setTimeout(() => {
-                    window.location.href = fullUrl;
-                }, 100);
-                obs.disconnect();
-                console.log("TuneTransporter (YTM AutoClick): Observer disconnected after finding track link.");
-                if (observerTimeout) clearTimeout(observerTimeout);
-                return; // Stop processing this mutation event
-            } else {
-                 console.warn("TuneTransporter (YTM AutoClick): Found track link element but href was invalid:", relativeUrl);
-                 // Continue to check for the button below
-            }
+    function attemptAutoNavigate() {
+        if (navDone) return;
+
+        console.log(`TuneTransporter: Auto-navigate attempt ${currentRetry + 1}/${AUTOCLICK_MAX_RETRIES}...`);
+
+        // Strategy 1: Top result card link (featured card on filtered searches)
+        const topCardLink = document.querySelector('ytmusic-card-shelf-renderer a.yt-simple-endpoint');
+        if (topCardLink && topCardLink.href) {
+            navDone = true;
+            console.log(`TuneTransporter: Navigating to top card result: ${topCardLink.href}`);
+            // Set no-redirect flag so ytm2spotify-content.js won't redirect back to Spotify
+            chrome.storage.local.set({ tunetransporterNoRedirect: Date.now() }, () => {
+                window.location.href = topCardLink.href;
+            });
+            return;
         }
 
-        // --- Priority 2: Check for Chevron Button (Album/Playlist) ---
-        const buttonElement = document.querySelector(chevronButtonSelector);
-        if (buttonElement) {
-            console.log("TuneTransporter (YTM AutoClick): Found chevron button (album/playlist?), attempting click via observer...");
-            // Small delay before click might help in some dynamic loading scenarios
-            setTimeout(() => {
-                buttonElement.click();
-                console.log("TuneTransporter (YTM AutoClick): Chevron button click simulated via observer.");
-            }, 100); // 100ms delay
-            obs.disconnect(); // Stop observing once clicked
-            console.log("TuneTransporter (YTM AutoClick): Observer disconnected after clicking chevron button.");
-            if (observerTimeout) clearTimeout(observerTimeout);
-            return; // Stop processing this mutation event
+        // Strategy 2: First list item title link
+        const firstListItemLink = document.querySelector('ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer a.yt-simple-endpoint');
+        if (firstListItemLink && firstListItemLink.href) {
+            navDone = true;
+            console.log(`TuneTransporter: Navigating to first list result: ${firstListItemLink.href}`);
+            chrome.storage.local.set({ tunetransporterNoRedirect: Date.now() }, () => {
+                window.location.href = firstListItemLink.href;
+            });
+            return;
         }
 
-        // If neither element is found yet, the observer continues...
-    };
-
-    observer = new MutationObserver(observerCallback); // Assign to the outer variable
-    observer.observe(observerTargetNode, observerConfig);
-    console.log("TuneTransporter (YTM AutoClick): MutationObserver started, waiting for track link or chevron button...");
-
-    // Add a timeout to disconnect the observer if neither element appears after a while
-    observerTimeout = setTimeout(() => {
-        if (observer) { // Check if observer still exists (hasn't been disconnected by success)
-             observer.disconnect();
-             console.warn("TuneTransporter (YTM AutoClick): Observer timed out after 15 seconds. Neither track link nor chevron button found.");
+        // Strategy 3: Broader fallback — any result link
+        const anyResultLink = document.querySelector('ytmusic-responsive-list-item-renderer a.yt-simple-endpoint');
+        if (anyResultLink && anyResultLink.href) {
+            navDone = true;
+            console.log(`TuneTransporter: Navigating to fallback result: ${anyResultLink.href}`);
+            chrome.storage.local.set({ tunetransporterNoRedirect: Date.now() }, () => {
+                window.location.href = anyResultLink.href;
+            });
+            return;
         }
-    }, 15000); // 15 seconds timeout
-}
 
-// --- Trigger the observer ---
-// Run the function when the content script loads on a matching page
-// No need to check flags here, the function itself does it now.
-handleYtmSearchResultRedirect();
+        // Retry or give up
+        currentRetry++;
+        if (currentRetry < AUTOCLICK_MAX_RETRIES) {
+            setTimeout(attemptAutoNavigate, AUTOCLICK_RETRY_DELAY_MS);
+        } else {
+            console.warn(`TuneTransporter: Auto-navigate failed after ${AUTOCLICK_MAX_RETRIES} attempts. Results may not have loaded.`);
+        }
+    }
+
+    // Start after a short delay to let the search results render
+    setTimeout(attemptAutoNavigate, 800);
+});

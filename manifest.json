@@ -10,11 +10,7 @@
     "128": "icons/icon128.jpeg"
   },
   "permissions": [
-    "storage",
-    "scripting",
-    "tabs",
-    "clipboardWrite",
-    "declarativeNetRequest"
+    "storage"
   ],
   "host_permissions": [
     "*://open.spotify.com/*",
@@ -32,19 +28,9 @@
       "matches": [
         "https://open.spotify.com/track/*",
         "https://open.spotify.com/album/*",
-        "https://open.spotify.com/artist/*",
-        "https://open.spotify.com/search/*",
-        "https://open.spotify.com/playlist/*",
-        "https://open.spotify.com/collection/*"
+        "https://open.spotify.com/artist/*"
       ],
       "js": [ "utils.js", "spotify2ytm-content.js" ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://open.spotify.com/*"
-      ],
-      "js": [ "utils.js", "spotify-playlist-content.js" ],
       "run_at": "document_idle"
     },
     {
@@ -57,40 +43,19 @@
       "run_at": "document_idle"
     },
     {
-      "matches": [
-        "https://music.youtube.com/search*"
-      ],
-      "js": [ "ytm-autoclick-content.js" ],
-      "run_at": "document_idle"
-    },
-    {
       "matches": [ "*://www.youtube.com/watch*" ],
       "js": [ "yt-fallback-content.js" ],
       "run_at": "document_idle"
     },
     {
-      "matches": [ "*://music.youtube.com/library/playlists*" ],
-      "js": [ "utils.js", "ytm-playlist-content.js", "ytm-library-content.js" ],
+      "matches": [ "https://music.youtube.com/search*" ],
+      "js": [ "ytm-autoclick-content.js" ],
       "run_at": "document_idle"
     },
     {
-      "matches": [ "*://music.youtube.com/search*" ],
-      "js": [ "utils.js", "ytm-search-content.js" ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [ "*://music.youtube.com/watch*" ],
-      "js": [ "utils.js", "ytm-watch-content.js" ],
+      "matches": [ "https://open.spotify.com/search/*" ],
+      "js": [ "spotify-autoclick-content.js" ],
       "run_at": "document_idle"
     }
-  ],
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "ruleset_1",
-        "enabled": false,
-        "path": "rules.json"
-      }
-    ]
-  }
+  ]
 }

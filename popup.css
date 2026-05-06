@@ -1,7 +1,7 @@
 /* TuneTransporter/popup.css */
 body {
     width: 250px;
-    font-family: sans-serif; /* Add a default font */
+    font-family: sans-serif;
     padding: 10px;
     box-sizing: border-box;
 }
@@ -14,60 +14,19 @@ h1 {
 }
 
 label {
-    display: flex; /* Use flexbox for alignment */
+    display: flex;
     align-items: center;
-    margin-bottom: 10px; /* More space */
-    cursor: pointer; /* Indicate it's clickable */
+    margin-bottom: 10px;
+    cursor: pointer;
 }
 
 input[type="checkbox"] {
-    margin-right: 8px; /* Space between checkbox and text */
-}
-
-/* ------- NEW STYLES FOR BUTTONS AND STATUS ------- */
-
-hr { /* Style for the separator */
-    margin-top: 15px;
-    margin-bottom: 10px;
-    border: 0;
-    border-top: 1px solid #ccc;
-}
-
-button {
-    display: block; /* Make buttons take full width */
-    width: 100%;
-    padding: 8px;
-    margin-top: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #f0f0f0; /* Slightly darker default background for enabled */
-    cursor: pointer;
-    font-size: 0.9em; /* Match status message size */
-    color: #333; /* Ensure text is dark enough */
-}
-
-    button:disabled {
-        cursor: not-allowed;
-        opacity: 0.5;
-        background-color: #f8f8f8; /* Keep disabled background light */
-        color: #999; /* Lighter text when disabled */
-    }
-
-    button:hover:not(:disabled) {
-        background-color: #e0e0e0; /* Darker hover for enabled */
-    }
-
-#statusMessage {
-    margin-top: 10px;
-    text-align: center;
-    font-size: 0.9em;
-    min-height: 1.2em; /* Prevent layout shift when text appears/disappears */
-    color: #555; /* Optional: Dimmer color for status */
+    margin-right: 8px;
 }
 
 .popup-icon {
-    width: 18px; /* Or your desired size */
-    height: 18px; /* Or your desired size */
+    width: 18px;
+    height: 18px;
     margin-right: 5px;
     vertical-align: middle;
 }
